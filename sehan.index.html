@@ -1,0 +1,2135 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>새한 생산계획</title>
+<style>
+:root{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#1d2330; --ink2:#5b6475; --line:#dfe3ea; --line2:#eef0f4;
+  --accent:#1f5fbf; --accent-ink:#ffffff; --accent-soft:#e7effb;
+  --warn:#b45309; --warn-soft:#fff4e0; --err:#b42318; --err-soft:#fdecea; --ok:#127a45; --ok-soft:#e5f5ec;
+  --info:#5b6475; --info-soft:#eef0f4; --we:#f3f4f7; --today:#fff8db; --tint-l:91%; --tint-s:60%;
+  --stop:#e6e8ec; --note:#8a5a00;
+  --font:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#13161c; --panel:#1b1f27; --ink:#e6e9ef; --ink2:#9aa3b2; --line:#2e3440; --line2:#252a33;
+    --accent:#6ea2ff; --accent-ink:#0d1320; --accent-soft:#1d2a44;
+    --warn:#f0a43a; --warn-soft:#3a2a12; --err:#ff7a6e; --err-soft:#3d1a17; --ok:#4cc38a; --ok-soft:#173326;
+    --info:#9aa3b2; --info-soft:#252a33; --we:#181c23; --today:#2c2914; --tint-l:24%; --tint-s:35%;
+    --stop:#2a2f38; --note:#e0b45a;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#13161c; --panel:#1b1f27; --ink:#e6e9ef; --ink2:#9aa3b2; --line:#2e3440; --line2:#252a33;
+  --accent:#6ea2ff; --accent-ink:#0d1320; --accent-soft:#1d2a44;
+  --warn:#f0a43a; --warn-soft:#3a2a12; --err:#ff7a6e; --err-soft:#3d1a17; --ok:#4cc38a; --ok-soft:#173326;
+  --info:#9aa3b2; --info-soft:#252a33; --we:#181c23; --today:#2c2914; --tint-l:24%; --tint-s:35%;
+  --stop:#2a2f38; --note:#e0b45a;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.45 var(--font)}
+button,select,input,textarea{font:inherit;color:inherit}
+button,.btn{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 12px;cursor:pointer;white-space:nowrap}
+button:hover,.btn:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+button.danger{color:var(--err);border-color:var(--err)}
+button:disabled{opacity:.45;cursor:not-allowed}
+input,select,textarea{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:-1px}
+
+/* top bar */
+.topbar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
+.brand{font-weight:700;font-size:16px}
+.brand small{display:block;font-weight:400;font-size:12px;color:var(--ink2)}
+.picker{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.picker select{min-width:260px;max-width:100%}
+.spacer{flex:1}
+.top-actions{display:flex;gap:6px;flex-wrap:wrap}
+.saved{font-size:12px;color:var(--ink2)}
+
+/* workflow */
+.flow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:10px;padding:12px 16px}
+.step{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px;position:relative}
+.step h4{margin:0 0 2px;font-size:13px;color:var(--ink2);font-weight:600}
+.step .v{font-size:15px;font-weight:600}
+.step .s{font-size:12px;color:var(--ink2)}
+.step.done{border-color:var(--ok)}
+.step.done h4::after{content:" ✓";color:var(--ok)}
+.step.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.step.late{border-color:var(--err)}
+.step .act{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
+.flowside{display:flex;flex-direction:column;gap:6px;justify-content:center}
+.flowside .badge{text-align:center}
+.badge{display:inline-block;font-size:12px;padding:1px 8px;border-radius:999px;background:var(--info-soft);color:var(--info);font-weight:600}
+.badge.draft{background:var(--warn-soft);color:var(--warn)}
+.badge.confirmed{background:var(--accent-soft);color:var(--accent)}
+.badge.shared{background:var(--ok-soft);color:var(--ok)}
+.flownote{grid-column:1/-1;font-size:12px;color:var(--ink2);margin-top:-4px}
+
+/* tabs */
+.tabs{display:flex;gap:2px;padding:0 16px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs button{border:none;border-bottom:2px solid transparent;border-radius:0;background:none;padding:8px 14px;color:var(--ink2)}
+.tabs button.on{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+.tabs .cnt{font-size:11px;background:var(--warn-soft);color:var(--warn);border-radius:999px;padding:0 6px;margin-left:4px}
+main{padding:12px 16px 40px}
+.tab{display:none}.tab.on{display:block}
+
+/* filters */
+.filters{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px}
+.chip{border-radius:999px;padding:4px 12px;font-size:13px}
+.chip.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.filters input[type=search]{min-width:200px}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--ink2);margin:0 0 8px}
+.legend i{display:inline-block;width:14px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:4px}
+
+/* grid */
+.gridwrap{overflow:auto;max-height:calc(100vh - 290px);min-height:300px;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+table.grid{border-collapse:separate;border-spacing:0;font-size:12px;min-width:100%}
+.grid th,.grid td{border-right:1px solid var(--line2);border-bottom:1px solid var(--line2);padding:0;vertical-align:top}
+.grid thead th{position:sticky;background:var(--panel);z-index:3;font-weight:600;text-align:center;padding:4px 2px}
+.grid thead tr.wk th{top:0;height:26px;border-bottom:1px solid var(--line)}
+.grid thead tr.dt th{top:26px;border-bottom:1px solid var(--line)}
+.grid thead th.mcol{left:0;z-index:5;top:0}
+.grid .mcol{position:sticky;left:0;background:var(--panel);z-index:2;min-width:150px;max-width:150px;text-align:left;padding:6px 8px;border-right:1px solid var(--line)}
+.grid .mcol b{font-size:13px;display:block}
+.grid .mcol span{color:var(--ink2);font-size:11px;font-weight:400}
+.grid th.dcol{min-width:104px}
+.grid th.dcol .dw{font-size:11px;color:var(--ink2);font-weight:400}
+.grid th.we,.grid td.we{background:var(--we)}
+.grid th.today{background:var(--today)}
+.grid tr.team td{background:var(--line2);font-weight:700;padding:5px 8px;font-size:12px}
+.grid tr.team td span.st{position:sticky;left:8px}
+.grid tr.team td small{font-weight:400;color:var(--ink2);margin-left:6px}
+.cell{cursor:pointer;height:52px;padding:3px 5px !important;position:relative;max-width:140px}
+.cell.act{background:hsl(var(--h) var(--tint-s) var(--tint-l))}
+.cell.start{border-left:3px solid hsl(var(--h) 55% 45%)}
+.cell .t{font-weight:600;line-height:1.25;word-break:keep-all;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cell .cont{color:var(--ink2);opacity:.55}
+.cell .meta{display:flex;gap:3px;flex-wrap:wrap;margin-top:2px}
+.b{font-size:10px;border-radius:3px;padding:0 4px;line-height:15px;font-weight:600}
+.b.chg{background:var(--accent-soft);color:var(--accent)}
+.b.chg.nodata{background:transparent;box-shadow:inset 0 0 0 1px var(--accent)}
+.b.warn{background:var(--err-soft);color:var(--err)}
+.b.unk{background:var(--info-soft);color:var(--info)}
+.b.q{background:transparent;color:var(--ink2);font-weight:400;padding:0}
+.cell .note{font-size:11px;color:var(--note);line-height:1.2;margin-top:2px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.cell.stop{background:repeating-linear-gradient(135deg,var(--stop) 0 6px,transparent 6px 12px)}
+.cell.mis{box-shadow:inset 0 0 0 2px var(--err)}
+.cell:hover{outline:2px solid var(--accent);outline-offset:-2px;z-index:1}
+.cell.flash{animation:flash 1.6s ease 2}
+@keyframes flash{50%{box-shadow:inset 0 0 0 3px var(--warn)}}
+.grid .sumcol{min-width:120px;padding:6px 8px !important;text-align:right;font-size:12px;border-left:1px solid var(--line)}
+.grid td.sumcol b{display:block;font-size:13px}
+.grid td.sumcol span{color:var(--ink2);font-size:11px}
+.locked .cell{cursor:default}
+.empty{padding:40px;text-align:center;color:var(--ink2)}
+
+/* panels */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.card .k{font-size:12px;color:var(--ink2)}
+.card .n{font-size:22px;font-weight:700}
+.card.w .n{color:var(--warn)} .card.e .n{color:var(--err)}
+.list{background:var(--panel);border:1px solid var(--line);border-radius:8px}
+.item{display:grid;grid-template-columns:auto 120px 1fr auto;gap:10px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line2)}
+.item:last-child{border-bottom:none}
+.lv{font-size:11px;font-weight:700;border-radius:3px;padding:1px 6px}
+.lv.warn{background:var(--err-soft);color:var(--err)} .lv.info{background:var(--info-soft);color:var(--info)}
+.item .ty{font-weight:600;font-size:13px}
+.item .msg{font-size:13px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin-bottom:12px}
+.panel h3{margin:0 0 8px;font-size:15px}
+.muted{color:var(--ink2);font-size:12px}
+table.tbl{border-collapse:collapse;width:100%;font-size:13px}
+.tbl th,.tbl td{border-bottom:1px solid var(--line2);padding:6px 8px;text-align:left;vertical-align:top}
+.tbl th{color:var(--ink2);font-weight:600;font-size:12px;background:var(--line2)}
+.tbl td.num{text-align:right;font-variant-numeric:tabular-nums}
+.tblwrap{overflow:auto;max-height:calc(100vh - 300px);border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+.tblwrap .tbl th{position:sticky;top:0}
+.form{display:grid;grid-template-columns:160px minmax(0,320px);gap:8px 12px;align-items:center}
+.form label{color:var(--ink2);font-size:13px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+/* dialogs */
+dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);padding:0;width:min(520px,calc(100vw - 32px))}
+dialog::backdrop{background:rgba(10,14,22,.45)}
+dialog form{padding:16px 18px}
+dialog h3{margin:0 0 4px;font-size:16px}
+dialog .sub{color:var(--ink2);font-size:12px;margin-bottom:12px}
+dialog .fld{margin-bottom:10px}
+dialog .fld>label{display:block;font-size:12px;color:var(--ink2);margin-bottom:3px}
+dialog .fld input,dialog .fld select,dialog .fld textarea{width:100%}
+dialog .seg{display:flex;gap:0;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+dialog .seg label{flex:1;text-align:center;padding:6px 4px;cursor:pointer;font-size:13px;border-right:1px solid var(--line);color:var(--ink)}
+dialog .seg label:last-child{border-right:none}
+dialog .seg input{display:none}
+dialog .seg label:has(input:checked){background:var(--accent);color:var(--accent-ink);font-weight:600}
+.hint{font-size:12px;margin-top:4px;padding:6px 8px;border-radius:6px}
+.hint.ok{background:var(--ok-soft);color:var(--ok)} .hint.warn{background:var(--err-soft);color:var(--err)} .hint.info{background:var(--info-soft);color:var(--info)}
+.dlgbtns{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+.dlgbtns .left{margin-right:auto}
+
+/* inventory */
+dialog.wide{width:min(1000px,calc(100vw - 32px))}
+.mapgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px 12px;margin:10px 0}
+.mapgrid label{font-size:12px;color:var(--ink2);display:flex;flex-direction:column;gap:3px}
+.mapgrid select{width:100%}
+.prevwrap{overflow:auto;max-height:230px;border:1px solid var(--line);border-radius:6px;margin-top:6px}
+.prevwrap .tbl{font-size:12px}
+.invbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.invbar select{min-width:240px;max-width:100%}
+.tbl.inv td{padding:4px 6px}
+.tbl.inv input{width:84px;text-align:right;padding:3px 5px;font-size:12px}
+.tbl.inv input.txt{width:150px;text-align:left}
+.tbl.inv td.num{white-space:nowrap}
+.tbl.inv tr.warn td:first-child{box-shadow:inset 3px 0 0 var(--err)}
+.tbl.inv .st{min-width:220px}
+.tbl.inv .st div{font-size:12px;line-height:1.35}
+.tbl.inv .st .w{color:var(--err)} .tbl.inv .st .i{color:var(--ink2)}
+.lv.ok{background:var(--ok-soft);color:var(--ok)}
+.neg{color:var(--err);font-weight:600}
+.tblwrap.inv{max-height:calc(100vh - 360px)}
+.tolrow input{width:90px}
+
+/* rules */
+.rulecols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
+.rf{display:grid;grid-template-columns:130px minmax(0,1fr);gap:8px 10px;align-items:start}
+.rf>label{font-size:13px;color:var(--ink2);padding-top:6px}
+.rf input,.rf select,.rf textarea{width:100%}
+.rf select[multiple]{min-height:150px}
+.rf .full{grid-column:1/-1}
+.tbl tr.off td{opacity:.45}
+.tbl td .hit{color:var(--err);font-weight:600}
+.tbl td .pl{font-size:12px;color:var(--ink2)}
+@media (max-width:1100px){.rulecols{grid-template-columns:1fr}}
+@media (max-width:600px){.rf{grid-template-columns:1fr}.rf>label{padding-top:0}}
+
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:50;max-width:calc(100vw - 32px)}
+.toast.on{opacity:1}
+.printhead{display:none}
+
+@media (max-width:900px){
+  .flow{grid-template-columns:1fr}
+  .item{grid-template-columns:auto 1fr;}
+  .item .msg{grid-column:1/-1}
+  .form{grid-template-columns:1fr}
+  .gridwrap{max-height:none}
+}
+@media print{
+  @page{size:A3 landscape;margin:8mm}
+  body{background:#fff;color:#000;font-size:10px}
+  .topbar,.flow,.tabs,.filters,.legend,.toast,.noprint{display:none !important}
+  main{padding:0}
+  .tab{display:none !important}
+  #tab-plan{display:block !important}
+  .printhead{display:block;margin-bottom:6px}
+  .printhead h2{margin:0;font-size:16px}
+  .gridwrap{overflow:visible;max-height:none;border:none}
+  .grid thead th,.grid .mcol{position:static}
+  .grid th.dcol{min-width:0}
+  .cell{height:auto;max-width:none;cursor:default}
+  .cell .t,.cell .note{-webkit-line-clamp:unset}
+  tr{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">새한프라텍 생산계획<small>2주 계획 · 목요일 기준 · 설비 기준정보 연동</small></div>
+  <div class="picker">
+    <select id="planSelect" aria-label="계획 선택"></select>
+    <button id="btnNew">+ 새 계획</button>
+  </div>
+  <div class="spacer"></div>
+  <span class="saved" id="saved"></span>
+  <div class="top-actions">
+    <button id="btnCsv">엑셀(CSV) 내보내기</button>
+    <button id="btnPrint">인쇄 · 현장 공유용</button>
+  </div>
+</header>
+
+<section class="flow" id="flow"></section>
+
+<nav class="tabs" id="tabs">
+  <button data-tab="plan" class="on">계획표</button>
+  <button data-tab="check">검증 결과<span class="cnt" id="checkCnt" hidden></span></button>
+  <button data-tab="history">변경 이력</button>
+  <button data-tab="inv">재고·출고가능<span class="cnt" id="invCnt" hidden></span></button>
+  <button data-tab="chg">교체시간 데이터</button>
+  <button data-tab="rules">금형·배치 규칙</button>
+  <button data-tab="master">설비·제품 기준정보</button>
+  <button data-tab="settings">설정</button>
+</nav>
+
+<main>
+  <section class="tab on" id="tab-plan">
+    <div class="printhead" id="printHead"></div>
+    <div class="filters" id="teamChips"></div>
+    <div class="legend">
+      <span><i style="background:hsl(210 60% 80%);border-left:3px solid hsl(210 55% 45%)"></i>품목 시작·변경일</span>
+      <span><i style="background:hsl(210 60% 91%)"></i>같은 품목 계속 생산</span>
+      <span><b class="b chg">교체 4.5h ●</b> 교체시간 데이터 적용</span>
+      <span><b class="b chg nodata">교체 6h</b> 데이터 없음(기본값)</span>
+      <span><b class="b warn">설비 부적합</b> 이 설비에 등록되지 않은 품목</span>
+      <span><b class="b unk">미등록</b> 기준정보에 없는 품목</span>
+      <span><i style="background:repeating-linear-gradient(135deg,var(--stop) 0 3px,transparent 3px 6px)"></i>정지(휴무·정비)</span>
+    </div>
+    <div class="gridwrap" id="gridWrap"><table class="grid" id="grid"></table></div>
+  </section>
+  <section class="tab" id="tab-check"></section>
+  <section class="tab" id="tab-history"></section>
+  <section class="tab" id="tab-inv"></section>
+  <section class="tab" id="tab-chg"></section>
+  <section class="tab" id="tab-rules"></section>
+  <section class="tab" id="tab-master"></section>
+  <section class="tab" id="tab-settings"></section>
+</main>
+
+<!-- 셀 편집 -->
+<dialog id="cellDlg">
+  <form method="dialog" id="cellForm">
+    <h3 id="cellTitle"></h3>
+    <div class="sub" id="cellSub"></div>
+    <div class="fld">
+      <label>입력 종류</label>
+      <div class="seg">
+        <label><input type="radio" name="kind" value="product" checked>품목 시작·변경</label>
+        <label><input type="radio" name="kind" value="memo">메모만</label>
+        <label><input type="radio" name="kind" value="stop">정지(휴무·정비)</label>
+      </div>
+    </div>
+    <div class="fld" id="fProduct">
+      <label for="inProduct">품목 <span class="muted" id="prodCount"></span></label>
+      <input id="inProduct" list="dlProducts" autocomplete="off" placeholder="품목명을 입력하거나 목록에서 선택">
+      <datalist id="dlProducts"></datalist>
+      <div class="hint" id="prodHint" hidden></div>
+    </div>
+    <div class="fld" id="fChange">
+      <label for="inChange">금형 교체</label>
+      <select id="inChange"></select>
+      <div class="hint warn" id="ruleHint" hidden></div>
+    </div>
+    <div class="fld">
+      <label for="inMemo">메모 (긴급·납기·수량 등)</label>
+      <textarea id="inMemo" rows="2"></textarea>
+    </div>
+    <div class="muted">이 날짜부터 다음 입력이 나올 때까지 같은 품목을 계속 생산하는 것으로 계산합니다 (기존 엑셀 생산배대와 같은 방식).</div>
+    <div class="dlgbtns">
+      <button type="button" class="danger left" id="btnCellDel">입력 삭제</button>
+      <button type="button" id="btnCellCancel">취소</button>
+      <button type="submit" class="primary" id="btnCellSave">저장</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- 새 계획 -->
+<dialog id="newDlg">
+  <form method="dialog" id="newForm">
+    <h3>새 2주 계획 만들기</h3>
+    <div class="sub">계획은 목요일부터 15일간(다다음 주 목요일까지)입니다. 다른 요일을 고르면 그 주의 목요일로 맞춥니다.</div>
+    <div class="fld"><label for="inStart">기준일</label><input type="date" id="inStart" required></div>
+    <div class="fld muted" id="newRange"></div>
+    <div class="fld"><label><input type="checkbox" id="inCarry" checked style="width:auto"> 직전 계획에서 겹치는 기간과 진행 중인 품목 이어받기</label></div>
+    <div class="dlgbtns">
+      <button type="button" id="btnNewCancel">취소</button>
+      <button type="submit" class="primary">만들기</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- 변경 등록 -->
+<dialog id="chgDlg">
+  <form method="dialog" id="chgForm">
+    <h3>계획 변경 등록</h3>
+    <div class="sub">확정된 계획을 고치려면 변경 사유를 남기고 새 Rev으로 수정합니다. 다시 확정하면 바뀐 칸이 자동으로 기록됩니다.</div>
+    <div class="fld"><label for="inChgType">변경 사유</label>
+      <select id="inChgType"><option>긴급 주문</option><option>납기 변경</option><option>설비 이상·정비</option><option>자재 부족</option><option>기타</option></select></div>
+    <div class="fld"><label for="inChgCust">고객사 · 품목 (선택)</label><input id="inChgCust" placeholder="예: 대상 / 김치 1.5kg"></div>
+    <div class="fld"><label for="inChgDesc">내용</label><textarea id="inChgDesc" rows="3" required placeholder="예: 11/3 납품 3만 개 긴급 추가, 08호기 김치 1.5kg 이틀 앞당김"></textarea></div>
+    <div class="fld"><label for="inChgReq">요청자</label><input id="inChgReq" placeholder="예: 영업팀 홍길동"></div>
+    <div class="dlgbtns">
+      <button type="button" id="btnChgCancel">취소</button>
+      <button type="submit" class="primary">변경 시작 (새 Rev)</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- 재고 가져오기 -->
+<dialog id="invDlg" class="wide">
+  <form method="dialog" id="invForm">
+    <h3>물류팀 재고 엑셀 가져오기</h3>
+    <div class="sub">물류팀 엑셀에서 표 범위(머리글 포함)를 복사해 아래에 붙여넣거나, CSV·텍스트 파일(ERP 내보내기 .xls 포함)을 고르세요. 열 이름을 보고 자동으로 짝을 맞추며, 직접 바꿀 수도 있습니다.</div>
+    <div class="row" style="margin-bottom:8px">
+      <label class="muted" for="invDate">기준일</label><input type="date" id="invDate" required>
+      <label class="muted" for="invSource">출처</label><input id="invSource" value="물류팀 엑셀" style="min-width:200px">
+    </div>
+    <textarea id="invPaste" rows="4" style="width:100%" placeholder="여기를 누르고 Ctrl+V 로 붙여넣기"></textarea>
+    <div class="row" style="margin-top:6px">
+      <label class="btn">파일 선택<input type="file" id="invFile" accept=".csv,.tsv,.txt,.xls" hidden></label>
+      <button type="button" id="invSample">샘플: 제품수불표 예시 불러오기</button>
+      <span class="muted" id="invInfo"></span>
+    </div>
+    <div id="invMapWrap" hidden>
+      <div class="row" style="margin-top:12px">
+        <label class="muted" for="invHeader">머리글 행</label><select id="invHeader" style="max-width:520px"></select>
+        <label class="muted"><input type="checkbox" id="invTwo"> 머리글이 2줄 (병합 셀)</label>
+      </div>
+      <div class="mapgrid" id="invMap"></div>
+      <div class="muted" id="invCount"></div>
+      <div class="prevwrap"><table class="tbl" id="invPreview"></table></div>
+    </div>
+    <div class="dlgbtns">
+      <button type="button" id="invCancel">취소</button>
+      <button type="submit" class="primary" id="invOk" disabled>가져오기</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script src="master-data.js"></script>
+<script>
+(() => {
+"use strict";
+
+/* ===================== 기준정보 ===================== */
+const MASTER = window.MASTER || { machines: [], samplePlan: null };
+const MACHINES = MASTER.machines;
+const MK = Object.fromEntries(MACHINES.map(m => [m.key, m]));
+const TEAMS = [...new Set(MACHINES.map(m => m.team))];
+const DAYS = 15;
+const STORE_KEY = "saehan-production-plan-v1";
+const DEFAULTS = {
+  author: "", confirmTime: "18:00", shareTime: "09:00",
+  fullH: 6, blowH: 2, dayH: 24, defaultChange: "full", baselineH: 8,
+  chStat: "median", chMinN: 1, chOtherMachines: true
+};
+const CHANGE_LABEL = { full: "Full Set", blow: "Blow Mold", none: "교체 없음", custom: "그룹 지정 교체", data: "교체(데이터 기준)", etc: "기타·미지정" };
+const STAT_LABEL = { median: "중앙값", avg: "평균", max: "최댓값" };
+const DOW = ["일", "월", "화", "수", "목", "금", "토"];
+
+/* ===================== 유틸 ===================== */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const pad = n => String(n).padStart(2, "0");
+const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parseIso = s => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
+const addDays = (s, n) => { const d = parseIso(s); d.setDate(d.getDate() + n); return iso(d); };
+const md = s => { const d = parseIso(s); return `${d.getMonth() + 1}/${d.getDate()}`; };
+const mdw = s => `${md(s)}(${DOW[parseIso(s).getDay()]})`;
+const fmtDT = t => { if (!t) return "-"; const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const fmtDur = ms => { if (ms == null || ms < 0) return "-"; const m = Math.round(ms / 60000); const h = Math.floor(m / 60); return h ? `${h}시간 ${m % 60}분` : `${m}분`; };
+const fmtQ = q => q == null ? "" : q >= 10000 ? `${(q / 10000).toFixed(q >= 100000 ? 0 : 1)}만` : Math.round(q).toLocaleString("ko-KR");
+const clone = o => JSON.parse(JSON.stringify(o));
+const norm = s => String(s ?? "").toUpperCase().replace(/#/g, "").replace(/[\s\[\]\(\)_\-.,/]/g, "");
+const hueOf = s => { let h = 0; for (const c of norm(s)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
+const thursdayOf = s => { const d = parseIso(s); const dow = (d.getDay() + 6) % 7; d.setDate(d.getDate() - dow + 3); return iso(d); };
+function weekLabel(s) {
+  const thu = parseIso(thursdayOf(s));
+  const first = new Date(thu.getFullYear(), thu.getMonth(), 1);
+  const firstThu = new Date(thu.getFullYear(), thu.getMonth(), 1 + ((4 - first.getDay() + 7) % 7));
+  return `${thu.getMonth() + 1}월 ${Math.round((thu - firstThu) / 6048e5) + 1}주간`;
+}
+let toastTimer;
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("on"), 2600); }
+
+/* ===================== 저장소 ===================== */
+let S; // 시작 단계에서 load()로 채움 (아래 상수·함수가 모두 정의된 뒤)
+function load() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) {
+      const s = JSON.parse(raw);
+      if (Array.isArray(s.plans)) return normalizeState(s);
+    }
+  } catch (e) { /* 저장소 사용 불가 → 새로 시작 */ }
+  const s = emptyState();
+  const sp = samplePlan();
+  if (sp) { s.plans.push(sp); s.currentId = sp.id; }
+  return s;
+}
+function emptyState() {
+  return normalizeState({ version: 1, settings: { ...DEFAULTS }, customProducts: [], moldGroups: [], rules: [], plans: [], currentId: null });
+}
+function normalizeState(s) {
+  s.settings = { ...DEFAULTS, ...s.settings };
+  s.customProducts = s.customProducts || [];
+  s.moldGroups = s.moldGroups || [];
+  s.rules = s.rules || [];
+  s.changeovers = s.changeovers || [];
+  s.inventory = { snapshots: [], currentId: null, mappings: {}, tolAbs: 0, tolPct: 0, ...(s.inventory || {}) };
+  return s;
+}
+function save() {
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(S));
+    $("#saved").textContent = `자동 저장됨 ${fmtDT(Date.now()).split(" ")[1]}`;
+  } catch (e) {
+    $("#saved").textContent = "⚠ 브라우저 저장 실패 — 설정 탭에서 백업 파일로 저장하세요";
+  }
+}
+
+/* ===================== 제품 매칭 ===================== */
+function productsOf(key) {
+  return [...(MK[key]?.products || []), ...S.customProducts.filter(p => p.machine === key)];
+}
+let exactIndex = null;
+function buildIndex() {
+  exactIndex = new Map();
+  for (const m of MACHINES) for (const p of productsOf(m.key)) {
+    const n = norm(p.name); if (!n) continue;
+    if (!exactIndex.has(n)) exactIndex.set(n, new Set());
+    exactIndex.get(n).add(m.key);
+  }
+}
+const matchCache = new Map();
+function matchProduct(key, text) {
+  const ck = key + "|" + text;
+  if (matchCache.has(ck)) return matchCache.get(ck);
+  const n = norm(text); let best = null;
+  if (n) {
+    const list = productsOf(key);
+    best = list.find(p => norm(p.name) === n) || null;
+    if (!best) {
+      let bestLen = 0;
+      for (const p of list) {
+        const pn = norm(p.name);
+        if (pn.length >= 3 && (n.includes(pn) || (pn.includes(n) && n.length >= 4)) && pn.length > bestLen) { best = p; bestLen = pn.length; }
+      }
+    }
+  }
+  matchCache.set(ck, best);
+  return best;
+}
+function resetMatch() { matchCache.clear(); buildIndex(); }
+/** 품목 상태: ok(이 설비 등록) / mismatch(다른 설비에만 등록) / unknown(기준정보 없음) */
+function productState(key, text) {
+  const p = matchProduct(key, text);
+  if (p) return { state: "ok", product: p };
+  const others = [...(exactIndex.get(norm(text)) || [])].filter(k => k !== key);
+  if (others.length) return { state: "mismatch", others };
+  return { state: "unknown" };
+}
+
+/* ===================== 계획 ===================== */
+const cur = () => S.plans.find(p => p.id === S.currentId);
+const planDates = p => Array.from({ length: DAYS }, (_, i) => addDays(p.start, i));
+function newPlan(start) {
+  const now = Date.now();
+  return {
+    id: "p" + start, start, rev: 0, status: "draft", entries: {},
+    createdAt: now, editStartedAt: now, confirmedAt: null, sharedAt: null,
+    author: S?.settings?.author || "", revisions: [], changes: []
+  };
+}
+const MEMO_RE = /(대기|검토|진행|확인|설치|수리|부동|감안|변경|정리|방문|발주|소진|조정|맞춤|출고|점검|종료|차질|입고|부착|\+|→|^\d[\d,.%\s]*(본|박스|일|개|P)?$|납$)/;
+function samplePlan() {
+  const sp = MASTER.samplePlan;
+  if (!sp) return null;
+  const p = newPlan(sp.start);
+  for (const [key, days] of Object.entries(sp.entries)) {
+    if (!MK[key]) continue;
+    p.entries[key] = {};
+    for (const [d, e] of Object.entries(days)) {
+      const matched = matchProductRaw(key, e.text);
+      const kind = matched || !MEMO_RE.test(e.text) ? "product" : "memo";
+      p.entries[key][d] = kind === "memo" ? { kind, text: "", memo: e.text, change: "auto" } : { kind, text: e.text, memo: "", change: "auto" };
+    }
+  }
+  const t = Date.now();
+  p.rev = 1; p.status = "shared"; p.sample = true;
+  p.confirmedAt = t; p.sharedAt = t;
+  p.revisions = [{ rev: 1, at: t, by: "엑셀 가져오기", entries: clone(p.entries), durationMs: null }];
+  p.changes = [{ rev: 1, type: "기타", customer: "", desc: `샘플: 「${sp.source}」에서 가져온 계획입니다. 날짜별 칸 내용을 품목·메모로 자동 분류했습니다.`, requester: "", at: t, by: "", diff: [] }];
+  return p;
+}
+// 샘플 분류용 매칭: 엑셀 기준정보만 사용 (S 생성 전에도 호출 가능)
+function matchProductRaw(key, text) {
+  const n = norm(text); if (!n) return null;
+  const list = MK[key]?.products || [];
+  return list.find(p => norm(p.name) === n) ||
+    list.find(p => { const pn = norm(p.name); return pn.length >= 3 && n.includes(pn); }) || null;
+}
+
+/* ===================== 금형 관계 · 교체 판단 ===================== */
+/** 같은 품목인지 비교하는 기준: 기준정보 품목명(일치 시) 또는 정규화한 입력값 */
+const ident = (key, t) => norm(matchProduct(key, t)?.name || t);
+const appliesTo = (x, key) => !x.machines?.length || x.machines.includes(key);
+const moldGroupsFor = key => S.moldGroups.filter(g => g.enabled !== false && appliesTo(g, key));
+const inGroup = (g, key, text) => { const id = ident(key, text); return g.products.some(n => ident(key, n) === id); };
+function hoursOf(type, custom) {
+  const st = S.settings;
+  return type === "full" ? +st.fullH : type === "blow" ? +st.blowH : type === "custom" ? (+custom || 0) : 0;
+}
+/* ===================== 제품별 교체시간 데이터 ===================== */
+const r2 = n => Math.round(n * 100) / 100;
+function statOf(hs, how) {
+  const a = [...hs].sort((x, y) => x - y);
+  if (how === "avg") return a.reduce((s, x) => s + x, 0) / a.length;
+  if (how === "max") return a.at(-1);
+  const m = a.length >> 1;
+  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+}
+/**
+ * 「이 품목으로 바꿀 때」 걸린 시간 기록을 모아 대표값 산출.
+ * 같은 설비 기록 우선 → (설정 시) 다른 설비 기록. 교체 유형이 정해져 있으면 그 유형 기록 우선.
+ */
+function chEstimate(key, text, type) {
+  const recs = S.changeovers; if (!recs?.length || !text) return null;
+  const st = S.settings, minN = Math.max(1, +st.chMinN || 1);
+  const id = ident(key, text);
+  const all = recs.filter(r => r.hours > 0 && ident(r.machine || key, r.product) === id);
+  if (!all.length) return null;
+  let pool = all.filter(r => r.machine === key), scope = "이 설비";
+  if (pool.length < minN) {
+    pool = all.filter(r => !r.machine); scope = "설비 무관";
+    if (pool.length < minN && st.chOtherMachines) { pool = all; scope = "다른 설비 포함"; }
+  }
+  if (type && type !== "data") { const t = pool.filter(r => r.type === type); if (t.length >= minN) pool = t; }
+  if (pool.length < minN) return null;
+  const h = r2(statOf(pool.map(r => +r.hours), st.chStat));
+  const cnt = {}; pool.forEach(r => cnt[r.type || "etc"] = (cnt[r.type || "etc"] || 0) + 1);
+  const [domType, domN] = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
+  const ws = pool.map(r => +r.workers).filter(x => x > 0);
+  return { h, n: pool.length, scope, type: domN / pool.length >= 0.6 && domType !== "etc" ? domType : null,
+    workers: ws.length ? r2(ws.reduce((a, b) => a + b, 0) / ws.length) : null,
+    basis: `${STAT_LABEL[st.chStat]} ${h}시간 (${scope} ${pool.length}건)` };
+}
+
+/** 품목 전환 시 교체 판단: ① 칸에서 직접 지정 ② 금형 그룹 ③ 제품별 교체시간 데이터 ④ 설정의 기본값 */
+function resolveChange(key, prevText, nextText, manual) {
+  const withData = (type, base, src, extra) => {
+    const est = chEstimate(key, nextText, type);
+    return est ? { change: type, lossH: est.h, src: `${src} · 교체시간 데이터 ${est.basis}`, est, ...extra }
+      : { change: type, lossH: base, src: `${src} · 교체시간 데이터 없음`, noData: true, ...extra };
+  };
+  if (manual && manual !== "auto") return manual === "none" ? { change: "none", lossH: 0, src: "직접 지정" }
+    : withData(manual, hoursOf(manual), `직접 지정(${CHANGE_LABEL[manual]})`);
+  if (!prevText || ident(key, prevText) === ident(key, nextText)) return { change: "none", lossH: 0, src: "" };
+  const g = moldGroupsFor(key).find(g => inGroup(g, key, prevText) && inGroup(g, key, nextText));
+  if (g) {
+    const src = `금형 그룹 「${g.name}」`;
+    if (g.inChange === "none" || g.inChange === "custom") return { change: g.inChange, lossH: hoursOf(g.inChange, g.hours), src, gid: g.id };
+    return withData(g.inChange, hoursOf(g.inChange), src, { gid: g.id });
+  }
+  const est = chEstimate(key, nextText);
+  if (est) return { change: est.type || "data", lossH: est.h, src: `교체시간 데이터 ${est.basis}`, est };
+  const d = S.settings.defaultChange;
+  return { change: d, lossH: hoursOf(d), src: "기본값 (교체시간 데이터 없음)", noData: d !== "none" };
+}
+
+/** 설비 한 대의 15일 일정 계산 */
+function timeline(p, key) {
+  const ents = p.entries[key] || {};
+  const st = S.settings;
+  let curp = null;
+  return planDates(p).map((d, i) => {
+    const e = ents[d] || null;
+    let rc = { change: "none", lossH: 0, src: "" }, isStart = false, prevText = null, note = e?.memo || "";
+    if (e && e.kind !== "memo") {
+      isStart = true;
+      const next = e.kind === "stop" ? { stop: true, text: "" } : { stop: false, text: e.text };
+      if (!next.stop) {
+        prevText = curp && !curp.stop ? curp.text : null; // 정지 뒤 재가동은 '직후 전환'이 아님
+        rc = resolveChange(key, prevText, next.text, e.change);
+      }
+      curp = next;
+    }
+    const active = curp && !curp.stop && curp.text;
+    const ps = active ? productState(key, curp.text) : null;
+    const avail = active ? Math.max(0, +st.dayH - rc.lossH) : 0;
+    const capa = ps?.product?.capa;
+    const qty = active && capa ? capa * avail / 24 : null;
+    return { date: d, i, entry: e, isStart, cur: curp, note, change: rc.change, lossH: rc.lossH, changeSrc: rc.src, changeGid: rc.gid,
+      changeEst: rc.est || null, changeNoData: !!rc.noData,
+      lostQty: active && capa && rc.lossH ? capa * Math.min(rc.lossH, +st.dayH) / 24 : null,
+      prevText, ps, qty, capa, active: !!active };
+  });
+}
+const allTimelines = p => Object.fromEntries(MACHINES.map(m => [m.key, timeline(p, m.key)]));
+const mname = m => `${m.site === "음성" ? "음성 " : ""}${m.id}${/^\d+$/.test(m.id) ? "호기" : ""}`;
+const mlabel = k => !k ? "설비 무관" : MK[k] ? mname(MK[k]) : k;
+
+/* ===================== 배치 규칙 평가 ===================== */
+const RULE_TYPES = {
+  deny: "설비 생산 불가",
+  minRun: "최소 연속 생산일수",
+  seq: "전환 순서 금지",
+  weekend: "주말 금형 교체 금지",
+};
+function evaluateRules(p, tls) {
+  const out = [];
+  const dates = planDates(p);
+  const hit = (r, key, date, msg, cells) => out.push({
+    level: r.level || "warn", type: RULE_TYPES[r.type] || "금형 보유 수 초과", key, date,
+    msg: msg + (r.memo ? ` (규칙 메모: ${r.memo})` : ""), ruleId: r.id, cells: cells || [[key, date]] });
+  for (const r of S.rules.filter(r => r.enabled !== false)) {
+    for (const m of MACHINES) {
+      if (!appliesTo(r, m.key)) continue;
+      const tl = tls[m.key], k = m.key;
+      if (r.type === "deny") {
+        for (const c of tl) if (c.isStart && c.active && ident(k, c.cur.text) === ident(k, r.a))
+          hit(r, k, c.date, `「${c.cur.text}」은(는) ${mname(m)}에서 생산하지 않는 규칙입니다.`);
+      } else if (r.type === "weekend") {
+        for (const c of tl) {
+          const w = parseIso(c.date).getDay();
+          if (c.change !== "none" && (w === 0 || w === 6))
+            hit(r, k, c.date, `${mdw(c.date)}에 금형 교체(${c.lossH}시간)가 잡혀 있습니다. 주말에는 교체하지 않는 규칙입니다.`);
+        }
+      } else if (r.type === "seq") {
+        for (const c of tl) if (c.isStart && c.active && c.prevText && ident(k, c.prevText) === ident(k, r.a) && ident(k, c.cur.text) === ident(k, r.b))
+          hit(r, k, c.date, `「${c.prevText}」 바로 다음에 「${c.cur.text}」로 전환할 수 없는 규칙입니다.`);
+      } else if (r.type === "minRun") {
+        const target = ident(k, r.a);
+        for (let i = 0; i < tl.length;) {
+          if (!tl[i].active) { i++; continue; }
+          const id = ident(k, tl[i].cur.text); let j = i;
+          while (j + 1 < tl.length && tl[j + 1].active && ident(k, tl[j + 1].cur.text) === id) j++;
+          const len = j - i + 1;
+          // 계획 첫날부터 이어지거나 마지막 날까지 이어지는 구간은 실제 길이를 알 수 없어 제외
+          if (id === target && i > 0 && j < tl.length - 1 && len < +r.n)
+            hit(r, k, tl[i].date, `「${tl[i].cur.text}」이(가) ${len}일만 생산하고 ${mdw(tl[j + 1].date)}에 바뀝니다. 최소 ${r.n}일 연속 생산해야 합니다.`,
+              tl.slice(i, j + 1).map(c => [k, c.date]));
+          i = j + 1;
+        }
+      }
+    }
+  }
+  // 금형 보유 수: 같은 그룹 품목을 동시에 생산하는 설비 수가 보유 금형 수보다 많으면 위반
+  for (const g of S.moldGroups.filter(g => g.enabled !== false && +g.count > 0)) {
+    let run = null;
+    const flush = () => {
+      if (!run) return;
+      out.push({ level: "warn", type: "금형 보유 수 초과", key: run.keys[0], date: run.from, groupId: g.id, cells: run.cells,
+        msg: `금형 그룹 「${g.name}」(보유 ${g.count}벌)을 ${run.keys.length}대가 동시에 사용합니다: ${run.keys.map(k => mname(MK[k])).join(", ")} · ${mdw(run.from)}${run.to !== run.from ? ` ~ ${mdw(run.to)}` : ""}` });
+      run = null;
+    };
+    dates.forEach((d, i) => {
+      const using = MACHINES.filter(m => appliesTo(g, m.key)).filter(m => { const c = tls[m.key][i]; return c.active && inGroup(g, m.key, c.cur.text); }).map(m => m.key);
+      if (using.length > +g.count) {
+        const sig = using.join("|");
+        if (run && run.sig === sig) { run.to = d; run.cells.push(...using.map(k => [k, d])); }
+        else { flush(); run = { sig, keys: using, from: d, to: d, cells: using.map(k => [k, d]) }; }
+      } else flush();
+    });
+    flush();
+  }
+  return out;
+}
+
+function deadlines(p) {
+  const st = S.settings;
+  return {
+    confirm: new Date(`${p.start}T${st.confirmTime || "18:00"}:00`).getTime(),
+    share: new Date(`${addDays(p.start, 1)}T${st.shareTime || "09:00"}:00`).getTime()
+  };
+}
+
+/* ===================== 검증 ===================== */
+function validate(p) {
+  const items = []; let changes = 0, loss = 0, unknown = 0, mismatch = 0, lostQty = 0, dataChanges = 0;
+  const unassigned = [];
+  const tls = allTimelines(p);
+  for (const m of MACHINES) {
+    const tl = tls[m.key];
+    if (!tl.some(c => c.active || c.cur?.stop)) unassigned.push(m);
+    for (const c of tl) {
+      if (c.change !== "none") { changes++; loss += c.lossH; lostQty += c.lostQty || 0; if (c.changeEst) dataChanges++; }
+      if (!(c.isStart && c.entry.kind === "product")) continue;
+      const t = c.cur.text;
+      if (c.ps.state === "mismatch") {
+        mismatch++;
+        items.push({ level: "warn", type: "설비 부적합", key: m.key, date: c.date,
+          msg: `「${t}」은(는) ${m.id}호기에 등록된 품목이 아닙니다. 등록된 설비: ${c.ps.others.map(k => `${MK[k].team.split(" (")[0]} ${MK[k].id}`).join(", ")}` });
+      } else if (c.ps.state === "unknown") {
+        unknown++;
+        items.push({ level: "info", type: "기준정보 미등록", key: m.key, date: c.date,
+          msg: `「${t}」은(는) 기준정보에 없는 품목입니다. 생산 가능 여부와 Capa를 확인할 수 없어 예상 생산량에서 빠집니다.` });
+      }
+    }
+  }
+  const ruleItems = evaluateRules(p, tls);
+  const firstInfo = items.findIndex(i => i.level === "info");
+  items.splice(firstInfo < 0 ? items.length : firstInfo, 0, ...ruleItems.filter(i => i.level === "warn"));
+  items.push(...ruleItems.filter(i => i.level !== "warn"));
+  const vmap = new Map();
+  for (const it of ruleItems) for (const [k, d] of it.cells) {
+    const id = k + "|" + d;
+    if (!vmap.has(id)) vmap.set(id, []);
+    vmap.get(id).push(it);
+  }
+  const now = Date.now(), dl = deadlines(p);
+  if (p.status === "draft" && now > dl.confirm)
+    items.unshift({ level: "warn", type: "확정 마감 초과", msg: `확정 마감(${mdw(p.start)} ${S.settings.confirmTime})이 지났습니다. 현재 Rev.${p.rev} 작성 중입니다.` });
+  if (p.status !== "shared" && now > dl.share)
+    items.unshift({ level: "warn", type: "현장 공유 지연", msg: `현장 공유 시각(${mdw(addDays(p.start, 1))} ${S.settings.shareTime})이 지났지만 아직 공유 처리되지 않았습니다.` });
+  if (unassigned.length)
+    items.push({ level: "info", type: "미배정 설비", msg: `2주 동안 품목·정지 입력이 없는 설비 ${unassigned.length}대: ${unassigned.map(m => `${m.site} ${m.id}`).join(", ")}` });
+  return { items, changes, loss: r2(loss), unknown, mismatch, unassigned, tls, ruleItems, vmap, lostQty, dataChanges };
+}
+
+/* ===================== 렌더: 워크플로 ===================== */
+function renderFlow() {
+  const p = cur(); const el = $("#flow");
+  if (!p) { el.innerHTML = ""; return; }
+  const now = Date.now(), dl = deadlines(p);
+  const statusTxt = { draft: "작성 중", confirmed: "확정", shared: "현장 공유 완료" }[p.status];
+  const last = p.revisions[p.revisions.length - 1];
+  const editing = p.status === "draft";
+  const elapsed = editing ? now - p.editStartedAt : last?.durationMs;
+  const remain = dl.confirm - now;
+  const remainTxt = remain > 0 ? `마감까지 ${fmtDur(remain)}` : `마감 ${fmtDur(-remain)} 지남`;
+  el.innerHTML = `
+    <div class="step ${editing ? "active" : "done"}">
+      <h4>① 계획 작성 · Rev.${p.rev}</h4>
+      <div class="v">${mdw(p.start)} ~ ${mdw(addDays(p.start, DAYS - 1))}</div>
+      <div class="s">${editing ? "작성 경과" : "작성 소요"} ${fmtDur(elapsed)} <span class="muted">(현행 평균 약 ${S.settings.baselineH}시간)</span></div>
+      <div class="s">담당: ${esc(p.author || S.settings.author || "미지정")}</div>
+    </div>
+    <div class="step ${editing ? (remain < 0 ? "late" : "") : "done"}">
+      <h4>② 확정 · 마감 ${mdw(p.start)} ${esc(S.settings.confirmTime)}</h4>
+      <div class="v">${p.confirmedAt && !editing ? `확정 ${fmtDT(p.confirmedAt)}` : remainTxt}</div>
+      <div class="s">${editing ? "확정하면 계획표가 잠기고 Rev이 기록됩니다." : `Rev.${p.rev} 확정본`}</div>
+      ${editing ? `<div class="act"><button class="primary" id="btnConfirm">계획 확정</button></div>` : ""}
+    </div>
+    <div class="step ${p.status === "shared" ? "done" : p.status === "confirmed" ? (now > dl.share ? "late" : "active") : ""}">
+      <h4>③ 현장 공유 · ${mdw(addDays(p.start, 1))} ${esc(S.settings.shareTime)}</h4>
+      <div class="v">${p.status === "shared" ? `공유 ${fmtDT(p.sharedAt)}` : p.status === "confirmed" ? "공유 대기" : "확정 후 진행"}</div>
+      <div class="s">인쇄물·CSV로 생산부서와 자재 담당자에게 공유</div>
+      ${p.status === "confirmed" ? `<div class="act"><button id="btnPrint2">인쇄</button><button class="primary" id="btnShare">공유 완료 처리</button></div>` : ""}
+    </div>
+    <div class="flowside">
+      <span class="badge ${p.status}">${statusTxt}</span>
+      ${!editing ? `<button id="btnChange">변경 등록<br><small>긴급 주문·납기 변경</small></button>` : p.rev > 0 ? `<span class="muted">변경 Rev 작성 중</span>` : ""}
+    </div>
+    <div class="flownote">※ 마감 시각은 인터뷰 내용(목요일까지 확정, 금요일 아침 공유)을 기준으로 잡았습니다. 실제 마감 시각은 재확인이 필요하며, 설정 탭에서 바꿀 수 있습니다.</div>`;
+  $("#btnConfirm")?.addEventListener("click", confirmPlan);
+  $("#btnShare")?.addEventListener("click", sharePlan);
+  $("#btnPrint2")?.addEventListener("click", doPrint);
+  $("#btnChange")?.addEventListener("click", () => { $("#chgForm").reset(); $("#chgDlg").showModal(); });
+}
+
+/* ===================== 렌더: 계획 선택 ===================== */
+function renderPicker() {
+  const sel = $("#planSelect");
+  const st = { draft: "작성 중", confirmed: "확정", shared: "공유됨" };
+  sel.innerHTML = [...S.plans].sort((a, b) => b.start.localeCompare(a.start)).map(p =>
+    `<option value="${p.id}" ${p.id === S.currentId ? "selected" : ""}>${mdw(p.start)} ~ ${mdw(addDays(p.start, DAYS - 1))} · Rev.${p.rev} · ${st[p.status]}${p.sample ? " (샘플)" : ""}</option>`).join("");
+}
+
+/* ===================== 렌더: 계획표 ===================== */
+let teamFilter = "all", search = "";
+function renderChips() {
+  const counts = Object.fromEntries(TEAMS.map(t => [t, MACHINES.filter(m => m.team === t).length]));
+  $("#teamChips").innerHTML =
+    `<button class="chip ${teamFilter === "all" ? "on" : ""}" data-team="all">전체 ${MACHINES.length}대</button>` +
+    TEAMS.map(t => `<button class="chip ${teamFilter === t ? "on" : ""}" data-team="${esc(t)}">${esc(t)} ${counts[t]}</button>`).join("") +
+    `<input type="search" id="search" placeholder="설비·품목 검색" value="${esc(search)}">`;
+  $("#search").addEventListener("input", e => { search = e.target.value; renderGrid(); });
+}
+$("#teamChips").addEventListener("click", e => {
+  const b = e.target.closest("[data-team]"); if (!b) return;
+  teamFilter = b.dataset.team; renderChips(); renderGrid();
+});
+
+function cellHtml(m, c, todayIso, viol) {
+  const d = parseIso(c.date), we = d.getDay() === 0 || d.getDay() === 6;
+  const cls = ["cell"]; if (we) cls.push("we"); if (c.date === todayIso) cls.push("today");
+  let inner = "", style = "", title = "";
+  if (c.cur?.stop) {
+    cls.push("stop");
+    if (c.isStart) inner += `<div class="t">정지</div>`;
+    title = "정지(휴무·정비)";
+  } else if (c.active) {
+    cls.push("act"); style = `--h:${hueOf(c.cur.text)}`;
+    title = c.cur.text + (c.capa ? ` · Capa ${c.capa.toLocaleString("ko-KR")}본/일` : "");
+    if (c.isStart) {
+      cls.push("start");
+      inner += `<div class="t">${esc(c.cur.text)}</div><div class="meta">`;
+      if (c.change !== "none") {
+        inner += `<span class="b chg${c.changeNoData ? " nodata" : ""}" title="${c.changeNoData ? "교체시간 데이터 없음 — 기본값 사용" : ""}">교체 ${c.lossH}h${c.changeEst ? " ●" : ""}</span>`;
+        title += `\n금형 교체 ${c.lossH}시간 · ${c.changeSrc}` + (c.lostQty ? `\n교체로 인한 생산 손실 ≈${fmtQ(c.lostQty)}본` : "") +
+          (c.changeEst?.workers ? `\n평균 투입 인원 ${c.changeEst.workers}명` : "");
+      }
+      if (viol?.some(v => v.level === "warn")) inner += `<span class="b warn">규칙 위반</span>`;
+      if (c.ps.state === "mismatch") { inner += `<span class="b warn">설비 부적합</span>`; cls.push("mis"); }
+      if (c.ps.state === "unknown") inner += `<span class="b unk">미등록</span>`;
+      if (c.qty) inner += `<span class="b q">≈${fmtQ(c.qty)}</span>`;
+      inner += `</div>`;
+    } else if (d.getDay() === 1) {
+      inner += `<div class="t cont">${esc(c.cur.text)}</div>`;
+    }
+  }
+  if (c.note) { inner += `<div class="note">✎ ${esc(c.note)}</div>`; title += (title ? "\n" : "") + "메모: " + c.note; }
+  if (viol?.length) {
+    if (viol.some(v => v.level === "warn")) cls.push("mis");
+    title += viol.map(v => `\n[${v.level === "warn" ? "규칙 위반" : "규칙 참고"}] ${v.type}: ${v.msg}`).join("");
+  }
+  return `<td class="${cls.join(" ")}" data-k="${m.key}" data-d="${c.date}" style="${style}" title="${esc(title)}">${inner}</td>`;
+}
+
+function renderGrid(forceAll) {
+  const p = cur(); const g = $("#grid");
+  if (!p) { g.innerHTML = `<tbody><tr><td class="empty">계획이 없습니다. 「+ 새 계획」으로 시작하세요.</td></tr></tbody>`; return; }
+  $("#gridWrap").classList.toggle("locked", p.status !== "draft");
+  const dates = planDates(p), todayIso = iso(new Date());
+  const groups = [];
+  for (const d of dates) { const l = weekLabel(d); if (groups.length && groups.at(-1).l === l) groups.at(-1).n++; else groups.push({ l, n: 1 }); }
+  let h = `<thead><tr class="wk"><th class="mcol" rowspan="2">설비</th>` +
+    groups.map(x => `<th colspan="${x.n}">${x.l}</th>`).join("") +
+    `<th class="sumcol" rowspan="2">2주 예상 생산량<br><span class="muted">교체 횟수·손실</span></th></tr><tr class="dt">` +
+    dates.map(d => { const w = parseIso(d).getDay(); return `<th class="dcol ${w === 0 || w === 6 ? "we" : ""} ${d === todayIso ? "today" : ""}"><div class="dw">${DOW[w]}요일</div>${md(d)}</th>`; }).join("") +
+    `</tr></thead><tbody>`;
+  const q = norm(search);
+  const teams = forceAll || teamFilter === "all" ? TEAMS : [teamFilter];
+  const V = validate(p);
+  let rows = 0;
+  for (const team of teams) {
+    const ms = MACHINES.filter(m => m.team === team);
+    const body = [];
+    for (const m of ms) {
+      const tl = V.tls[m.key];
+      if (q && !forceAll) {
+        const hay = norm(`${m.id}${m.equip}${m.site}`) + tl.map(c => norm((c.cur?.text || "") + c.note)).join("|");
+        if (!hay.includes(q)) continue;
+      }
+      let sum = 0, partial = false, chg = 0, loss = 0, lost = 0;
+      for (const c of tl) { if (c.qty) sum += c.qty; else if (c.active) partial = true; if (c.change !== "none") { chg++; loss += c.lossH; lost += c.lostQty || 0; } }
+      body.push(`<tr><th class="mcol"><b>${esc(m.site === "음성" ? "음성 " : "")}${esc(m.id)}${/^\d+$/.test(m.id) ? "호기" : ""}</b><span>${esc(m.equip)}</span></th>` +
+        tl.map(c => cellHtml(m, c, todayIso, V.vmap.get(m.key + "|" + c.date))).join("") +
+        `<td class="sumcol">${sum ? `<b>≈${fmtQ(sum)}본</b>` : `<b>-</b>`}${partial ? `<span>일부 Capa 미확인</span><br>` : ""}<span>교체 ${chg}회${loss ? ` · ${r2(loss)}h` : ""}${lost ? `<br>손실 ≈${fmtQ(lost)}본` : ""}</span></td></tr>`);
+    }
+    if (!body.length) continue;
+    rows += body.length;
+    h += `<tr class="team"><td colspan="${dates.length + 2}"><span class="st">${esc(team)}<small>${body.length}대</small></span></td></tr>` + body.join("");
+  }
+  if (!rows) h += `<tr><td colspan="${dates.length + 2}" class="empty">검색 결과가 없습니다.</td></tr>`;
+  g.innerHTML = h + "</tbody>";
+}
+
+$("#grid").addEventListener("click", e => {
+  const td = e.target.closest("td.cell"); if (!td) return;
+  const p = cur();
+  if (p.status !== "draft") { toast("확정된 계획입니다. 수정하려면 위의 「변경 등록」을 먼저 누르세요."); return; }
+  openCell(td.dataset.k, td.dataset.d);
+});
+
+/* ===================== 셀 편집 ===================== */
+let editing = null;
+function openCell(key, date) {
+  const p = cur(), m = MK[key];
+  editing = { key, date };
+  const e = p.entries[key]?.[date];
+  const tl = timeline(p, key); const c = tl.find(x => x.date === date);
+  const prev = tl.filter(x => x.date < date && x.cur && !x.cur.stop).at(-1);
+  const dayBefore = tl.find(x => x.date === addDays(date, -1));
+  editing.prev = dayBefore?.active ? dayBefore.cur.text : null; // '직후 전환' 판단용
+  $("#cellTitle").textContent = `${m.site} ${m.team} · ${m.id}${/^\d+$/.test(m.id) ? "호기" : ""} (${m.equip || "-"})`;
+  $("#cellSub").textContent = `${mdw(date)} · ` + (prev ? `전날까지 생산 품목: ${prev.cur.text}` : "이전 생산 품목 없음");
+  const kind = e?.kind || "product";
+  $("#cellForm").querySelectorAll("input[name=kind]").forEach(r => r.checked = r.value === kind);
+  $("#inProduct").value = e?.kind === "product" ? e.text : (c?.active && !e ? c.cur.text : "");
+  $("#inMemo").value = e?.memo || "";
+  const st = S.settings;
+  $("#inChange").innerHTML = `<option value="auto">자동 (이전 품목과 다르면 ${CHANGE_LABEL[st.defaultChange]})</option>` +
+    `<option value="full">Full Set 교체 (${st.fullH}시간)</option><option value="blow">Blow Mold 교체 (${st.blowH}시간)</option><option value="none">교체 없음 (같은 금형)</option>`;
+  $("#inChange").value = e?.change || "auto";
+  const list = productsOf(key);
+  $("#prodCount").textContent = `· 이 설비 등록 품목 ${list.length}개`;
+  $("#dlProducts").innerHTML = list.map(p => `<option value="${esc(p.name)}">${p.capa ? `Capa ${p.capa.toLocaleString("ko-KR")}본/일` : ""}${p.spec ? ` · ${esc(p.spec)}` : ""}</option>`).join("");
+  $("#btnCellDel").hidden = !e;
+  syncKind(); updateHint();
+  $("#cellDlg").showModal();
+  if (kind === "product") $("#inProduct").focus();
+}
+function syncKind() {
+  const k = $("#cellForm").querySelector("input[name=kind]:checked").value;
+  $("#fProduct").hidden = k !== "product";
+  $("#fChange").hidden = k !== "product";
+}
+/** 칸 편집 중: 금형 그룹에 따른 자동 교체 예상과 배치 규칙 위반 미리 알림 */
+function updateRuleHint() {
+  const v = $("#inProduct").value.trim(), rh = $("#ruleHint"), opt = $("#inChange").options[0];
+  if (!editing || !opt) return;
+  const { key, date, prev } = editing;
+  const rc = resolveChange(key, prev, v || prev || "", "auto");
+  opt.textContent = !v ? "자동 (이전 품목과 비교)" :
+    `자동 → ${rc.change === "none" ? "교체 없음" : `${CHANGE_LABEL[rc.change]} ${rc.lossH}시간`}${rc.src ? ` · ${rc.src}` : ""}`;
+  const msgs = [];
+  if (v) {
+    const manual = $("#inChange").value;
+    const eff = resolveChange(key, prev, v, manual);
+    const w = parseIso(date).getDay();
+    for (const r of S.rules.filter(r => r.enabled !== false && appliesTo(r, key))) {
+      if (r.type === "deny" && ident(key, v) === ident(key, r.a)) msgs.push(`${RULE_TYPES.deny}: 이 설비에서 「${r.a}」 생산 불가`);
+      if (r.type === "seq" && prev && ident(key, prev) === ident(key, r.a) && ident(key, v) === ident(key, r.b)) msgs.push(`${RULE_TYPES.seq}: 「${r.a}」 직후 「${r.b}」 불가`);
+      if (r.type === "weekend" && (w === 0 || w === 6) && eff.change !== "none") msgs.push(`${RULE_TYPES.weekend}: 주말에 금형 교체(${eff.lossH}시간)`);
+      if (r.type === "minRun" && ident(key, v) === ident(key, r.a)) msgs.push(`${RULE_TYPES.minRun}: 「${r.a}」은(는) 최소 ${r.n}일 연속 생산해야 합니다`);
+    }
+  }
+  rh.hidden = !msgs.length;
+  rh.innerHTML = msgs.map(m => `⚠ ${esc(m)}`).join("<br>");
+}
+$("#inChange").addEventListener("change", updateRuleHint);
+function updateHint() {
+  updateRuleHint();
+  const h = $("#prodHint"), v = $("#inProduct").value.trim();
+  if (!v || !editing) { h.hidden = true; return; }
+  const ps = productState(editing.key, v);
+  h.hidden = false;
+  if (ps.state === "ok") { h.className = "hint ok"; h.textContent = `✓ 기준정보 일치: ${ps.product.name}` + (ps.product.capa ? ` · Capa ${ps.product.capa.toLocaleString("ko-KR")}본/일` : " · Capa 정보 없음"); }
+  else if (ps.state === "mismatch") { h.className = "hint warn"; h.textContent = `⚠ 이 설비에 등록되지 않은 품목입니다. 등록 설비: ${ps.others.map(k => `${MK[k].site} ${MK[k].id}`).join(", ")}`; }
+  else { h.className = "hint info"; h.textContent = "ⓘ 기준정보에 없는 품목입니다. 저장은 되지만 생산 가능 여부와 예상 생산량을 계산할 수 없습니다."; }
+}
+$("#cellForm").addEventListener("change", e => { if (e.target.name === "kind") syncKind(); });
+$("#inProduct").addEventListener("input", updateHint);
+$("#btnCellCancel").addEventListener("click", () => $("#cellDlg").close());
+$("#btnCellDel").addEventListener("click", () => {
+  const p = cur(); delete p.entries[editing.key]?.[editing.date];
+  touch(p); $("#cellDlg").close(); renderAll();
+});
+$("#cellForm").addEventListener("submit", ev => {
+  const p = cur();
+  const kind = $("#cellForm").querySelector("input[name=kind]:checked").value;
+  const text = $("#inProduct").value.trim(), memo = $("#inMemo").value.trim();
+  if (kind === "product" && !text) { ev.preventDefault(); toast("품목명을 입력하세요."); return; }
+  if (kind === "memo" && !memo) { ev.preventDefault(); toast("메모 내용을 입력하세요."); return; }
+  p.entries[editing.key] = p.entries[editing.key] || {};
+  p.entries[editing.key][editing.date] = {
+    kind, text: kind === "product" ? text : "", memo,
+    change: kind === "product" ? $("#inChange").value : "auto"
+  };
+  touch(p); renderAll();
+});
+function touch(p) { p.updatedAt = Date.now(); save(); }
+
+/* ===================== 확정 · 공유 · 변경 ===================== */
+function diffEntries(a, b) {
+  const out = [];
+  const keys = new Set([...Object.keys(a || {}), ...Object.keys(b || {})]);
+  const show = e => !e ? "(없음)" : e.kind === "stop" ? "정지" + (e.memo ? ` · ${e.memo}` : "") : e.kind === "memo" ? `메모: ${e.memo}` : e.text + (e.memo ? ` · ${e.memo}` : "") + (e.change && e.change !== "auto" ? ` [${CHANGE_LABEL[e.change]}]` : "");
+  for (const k of keys) {
+    const da = a?.[k] || {}, db = b?.[k] || {};
+    for (const d of new Set([...Object.keys(da), ...Object.keys(db)])) {
+      if (JSON.stringify(da[d] || null) !== JSON.stringify(db[d] || null))
+        out.push({ key: k, date: d, before: show(da[d]), after: show(db[d]) });
+    }
+  }
+  return out.sort((x, y) => x.date.localeCompare(y.date) || x.key.localeCompare(y.key));
+}
+function confirmPlan() {
+  const p = cur(); const v = validate(p);
+  const warns = v.items.filter(i => i.level === "warn" && i.key).length;
+  if (warns && !confirm(`설비 부적합·금형·배치 규칙 경고가 ${warns}건 있습니다. 그래도 확정할까요?\n(검증 결과 탭에서 내용을 확인할 수 있습니다)`)) return;
+  const now = Date.now();
+  const prev = p.revisions.at(-1);
+  p.revisions.push({ rev: p.rev, at: now, by: S.settings.author, entries: clone(p.entries), durationMs: now - p.editStartedAt });
+  const ch = p.changes.find(c => c.rev === p.rev);
+  if (ch && prev) ch.diff = diffEntries(prev.entries, p.entries);
+  p.status = "confirmed"; p.confirmedAt = now;
+  if (!p.author) p.author = S.settings.author;
+  touch(p); renderAll(); toast(`Rev.${p.rev} 확정했습니다. 금요일 아침 현장 공유 후 「공유 완료 처리」를 눌러 주세요.`);
+}
+function sharePlan() {
+  const p = cur(); p.status = "shared"; p.sharedAt = Date.now();
+  touch(p); renderAll(); toast("현장 공유 완료로 기록했습니다.");
+}
+$("#btnChgCancel").addEventListener("click", () => $("#chgDlg").close());
+$("#chgForm").addEventListener("submit", () => {
+  const p = cur(); const now = Date.now();
+  p.rev += 1;
+  p.changes.push({ rev: p.rev, type: $("#inChgType").value, customer: $("#inChgCust").value.trim(),
+    desc: $("#inChgDesc").value.trim(), requester: $("#inChgReq").value.trim(), at: now, by: S.settings.author, diff: null });
+  p.status = "draft"; p.editStartedAt = now; p.sharedAt = null;
+  touch(p); renderAll(); toast(`Rev.${p.rev} 변경 작성을 시작했습니다. 수정 후 다시 확정하세요.`);
+});
+
+/* ===================== 새 계획 ===================== */
+function nextThursday() { const t = iso(new Date()); const th = thursdayOf(t); return th < t ? addDays(th, 7) : th; }
+function updateRange() {
+  const v = $("#inStart").value; if (!v) return;
+  const th = thursdayOf(v);
+  const exists = S.plans.some(p => p.start === th);
+  $("#newRange").innerHTML = `계획 기간: <b>${mdw(th)} ~ ${mdw(addDays(th, DAYS - 1))}</b>` + (exists ? ` <span style="color:var(--warn)">· 이미 있는 계획입니다 (열기만 합니다)</span>` : "");
+}
+$("#btnNew").addEventListener("click", () => { $("#inStart").value = nextThursday(); updateRange(); $("#newDlg").showModal(); });
+$("#inStart").addEventListener("input", updateRange);
+$("#btnNewCancel").addEventListener("click", () => $("#newDlg").close());
+$("#newForm").addEventListener("submit", () => {
+  const start = thursdayOf($("#inStart").value);
+  const ex = S.plans.find(p => p.start === start);
+  if (ex) { S.currentId = ex.id; save(); renderAll(); return; }
+  const p = newPlan(start);
+  if ($("#inCarry").checked) {
+    const prev = [...S.plans].filter(x => x.start < start).sort((a, b) => b.start.localeCompare(a.start))[0];
+    if (prev) carryOver(prev, p);
+  }
+  S.plans.push(p); S.currentId = p.id; save(); renderAll();
+  toast(`${mdw(start)} 시작 계획을 만들었습니다.`);
+});
+/** 직전 계획의 겹치는 날짜를 복사하고, 시작일에 진행 중인 품목을 이어받음 */
+function carryOver(prev, p) {
+  const last = addDays(prev.start, DAYS - 1);
+  for (const m of MACHINES) {
+    const src = prev.entries[m.key] || {}; const dst = {};
+    for (const [d, e] of Object.entries(src)) if (d >= p.start && d <= last) dst[d] = clone(e);
+    if (!dst[p.start] && p.start <= last) {
+      const tl = timeline(prev, m.key);
+      const at = tl.filter(c => c.date <= p.start).at(-1);
+      if (at?.cur?.stop) dst[p.start] = { kind: "stop", text: "", memo: "", change: "auto" };
+      else if (at?.active) dst[p.start] = { kind: "product", text: at.cur.text, memo: "", change: "none" };
+    }
+    if (Object.keys(dst).length) p.entries[m.key] = dst;
+  }
+}
+$("#planSelect").addEventListener("change", e => { S.currentId = e.target.value; save(); renderAll(); });
+
+/* ===================== 검증 탭 ===================== */
+let checkFilter = "all";
+function renderCheck() {
+  const p = cur(); const el = $("#tab-check");
+  if (!p) { el.innerHTML = ""; return; }
+  const v = validate(p);
+  const warn = v.items.filter(i => i.level === "warn").length;
+  const cnt = $("#checkCnt"); cnt.hidden = !warn; cnt.textContent = warn;
+  const list = v.items.filter(i => checkFilter === "all" || i.level === checkFilter);
+  el.innerHTML = `
+    <div class="cards">
+      <div class="card ${v.mismatch ? "e" : ""}"><div class="k">설비 부적합</div><div class="n">${v.mismatch}</div><div class="muted">등록되지 않은 설비에 배치</div></div>
+      <div class="card ${v.ruleItems.some(i => i.level === "warn") ? "e" : ""}"><div class="k">금형·배치 규칙 위반</div><div class="n">${v.ruleItems.filter(i => i.level === "warn").length}</div><div class="muted">참고 ${v.ruleItems.filter(i => i.level !== "warn").length}건 · 활성 규칙 ${S.rules.filter(r => r.enabled !== false).length + S.moldGroups.filter(g => g.enabled !== false && +g.count > 0).length}개</div></div>
+      <div class="card"><div class="k">기준정보 미등록 품목</div><div class="n">${v.unknown}</div><div class="muted">Capa·가능 설비 확인 불가</div></div>
+      <div class="card w"><div class="k">금형 교체</div><div class="n">${v.changes}회</div><div class="muted">가동시간 손실 ${v.loss}시간${v.lostQty ? ` · 생산 손실 ≈${fmtQ(v.lostQty)}본` : ""}<br>교체시간 데이터 적용 ${v.dataChanges}회 · 기본값 ${v.changes - v.dataChanges}회</div></div>
+      <div class="card"><div class="k">미배정 설비</div><div class="n">${v.unassigned.length}대</div><div class="muted">전체 ${MACHINES.length}대 중</div></div>
+    </div>
+    <div class="row noprint" style="margin-bottom:8px">
+      ${["all", "warn", "info"].map(f => `<button class="chip ${checkFilter === f ? "on" : ""}" data-cf="${f}">${{ all: `전체 ${v.items.length}`, warn: `경고 ${warn}`, info: `확인 ${v.items.length - warn}` }[f]}</button>`).join("")}
+      <span class="muted">항목을 누르면 계획표의 해당 칸으로 이동합니다.</span>
+    </div>
+    <div class="list">${list.length ? list.map((it, i) => `
+      <div class="item" data-i="${i}" style="${it.key ? "cursor:pointer" : ""}">
+        <span class="lv ${it.level}">${it.level === "warn" ? "경고" : "확인"}</span>
+        <span class="ty">${esc(it.type)}</span>
+        <span class="msg">${it.key ? `<b>${esc(MK[it.key].site)} ${esc(MK[it.key].id)}</b> · ${mdw(it.date)} — ` : ""}${esc(it.msg)}</span>
+        <span>${it.key ? "→" : ""}</span>
+      </div>`).join("") : `<div class="empty">검증 항목이 없습니다.</div>`}</div>`;
+  el.querySelectorAll("[data-cf]").forEach(b => b.addEventListener("click", () => { checkFilter = b.dataset.cf; renderCheck(); }));
+  el.querySelectorAll(".item").forEach(row => row.addEventListener("click", () => {
+    const it = list[+row.dataset.i]; if (it.key) jumpTo(it.key, it.date);
+  }));
+}
+function jumpTo(key, date) {
+  teamFilter = MK[key].team; search = ""; switchTab("plan"); renderChips(); renderGrid();
+  const td = document.querySelector(`td.cell[data-k="${CSS.escape(key)}"][data-d="${date}"]`);
+  if (td) { td.scrollIntoView({ block: "center", inline: "center" }); td.classList.add("flash"); setTimeout(() => td.classList.remove("flash"), 3400); }
+}
+
+/* ===================== 변경 이력 탭 ===================== */
+function renderHistory() {
+  const p = cur(); const el = $("#tab-history");
+  if (!p) { el.innerHTML = ""; return; }
+  const revRows = p.revisions.map(r => `<tr><td>Rev.${r.rev}</td><td>${fmtDT(r.at)}</td><td>${esc(r.by || "-")}</td><td class="num">${fmtDur(r.durationMs)}</td></tr>`).join("");
+  const chg = [...p.changes].reverse().map(c => `
+    <div class="panel">
+      <h3>Rev.${c.rev} · ${esc(c.type)} <span class="muted">${fmtDT(c.at)}${c.requester ? ` · 요청: ${esc(c.requester)}` : ""}${c.by ? ` · 작성: ${esc(c.by)}` : ""}</span></h3>
+      ${c.customer ? `<div><b>고객사·품목</b> ${esc(c.customer)}</div>` : ""}
+      <div>${esc(c.desc)}</div>
+      ${c.diff == null ? `<div class="muted" style="margin-top:6px">아직 다시 확정하지 않았습니다. 확정하면 바뀐 칸이 여기에 기록됩니다.</div>` :
+        c.diff.length ? `<div style="overflow:auto;margin-top:8px"><table class="tbl"><tr><th>날짜</th><th>설비</th><th>변경 전</th><th>변경 후</th></tr>${c.diff.map(d =>
+          `<tr><td>${mdw(d.date)}</td><td>${esc(MK[d.key]?.site || "")} ${esc(MK[d.key]?.id || d.key)}</td><td>${esc(d.before)}</td><td><b>${esc(d.after)}</b></td></tr>`).join("")}</table></div>` :
+        (p.sample && c.rev === 1 ? "" : `<div class="muted" style="margin-top:6px">바뀐 칸이 없습니다.</div>`)}
+    </div>`).join("");
+  el.innerHTML = `
+    <div class="panel"><h3>확정 기록</h3>
+      ${p.revisions.length ? `<div style="overflow:auto"><table class="tbl"><tr><th>Rev</th><th>확정 시각</th><th>확정자</th><th>작성 소요</th></tr>${revRows}</table></div>
+      <div class="muted" style="margin-top:6px">작성 소요 = 계획(또는 변경) 작성 시작부터 확정까지 걸린 시간. 현행 평균 약 ${S.settings.baselineH}시간과 비교해 개선 효과를 확인할 수 있습니다.</div>` : `<div class="muted">아직 확정 기록이 없습니다.</div>`}
+    </div>
+    <h3 style="font-size:15px;margin:16px 0 8px">변경 등록 내역 (긴급 주문 · 납기 변경 등)</h3>
+    ${chg || `<div class="panel muted">변경 내역이 없습니다. 확정 후 계획을 고칠 때 「변경 등록」을 사용하세요.</div>`}`;
+}
+
+/* ===================== 재고 · 실제 출고 가능 수량 ===================== */
+const INV_FIELDS = [
+  { f: "group", label: "공정·구분", re: /공정|구분|팀|창고/ },
+  { f: "hogi", label: "호기·설비", re: /호기|설비|라인/ },
+  { f: "code", label: "품번", re: /품번|코드/ },
+  { f: "name", label: "품명 *", re: /품명|제품명|규격|품목/ },
+  { f: "erp", label: "전산(ERP) 재고", re: /^(?!.*기초).*(현재고|전산|ERP|장부|재고)/i },
+  { f: "open", label: "기초재고", re: /기초/ },
+  { f: "prod", label: "생산·입고", re: /생산|입고/ },
+  { f: "out", label: "출고", re: /^(?!.*(대기|예정|가능)).*출고/ },
+  { f: "hq", label: "품질 보류", re: /품질|불량|보류/ },
+  { f: "hr", label: "반품", re: /반품/ },
+  { f: "hw", label: "출고 대기", re: /대기|예정|예약/ },
+  { f: "ho", label: "기타 보류", re: /기타/ },
+  { f: "actual", label: "물류 확인 출고가능", re: /가용|출고\s*가능|실재고|실사|사용\s*가능/ },
+  { f: "memo", label: "비고·사유", re: /비고|메모|사유/ },
+];
+// 더 구체적인 이름부터 짝짓기 (예: '기타 보류'가 '품질 보류'로 잡히지 않게)
+const GUESS_ORDER = ["code", "name", "group", "hogi", "actual", "hr", "hw", "ho", "hq", "erp", "open", "prod", "out", "memo"];
+const HOLDS = [["hq", "품질 보류"], ["hr", "반품"], ["hw", "출고 대기"], ["ho", "기타 보류"]];
+const NUM_FIELDS = ["erp", "open", "prod", "out", "hq", "hr", "hw", "ho", "actual"];
+const TOTAL_RE = /(^|\s)(합\s*계|소\s*계|총\s*계|계)$/;
+const fmtN = n => n == null ? "" : Math.round(n).toLocaleString("ko-KR");
+function toNum(v) {
+  let s = String(v ?? "").replace(/[,\s]/g, "");
+  if (!s || s === "-") return null;
+  let neg = false;
+  if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1); }
+  const n = Number(s);
+  return Number.isFinite(n) ? (neg ? -n : n) : null;
+}
+/** 엑셀 복사 텍스트(탭 구분) 또는 CSV → 2차원 배열. 따옴표 안 줄바꿈 지원 */
+function parseTable(text) {
+  const delim = text.includes("\t") ? "\t" : ",";
+  const rows = []; let row = [], cell = "", q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) {
+      if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch;
+    } else if (ch === '"' && cell === "") q = true;
+    else if (ch === delim) { row.push(cell); cell = ""; }
+    else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && text[i + 1] === "\n") i++;
+      row.push(cell); rows.push(row); row = []; cell = "";
+    } else cell += ch;
+  }
+  if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
+  return rows.map(r => r.map(c => c.replace(/\s+/g, " ").trim())).filter(r => r.some(Boolean));
+}
+function guessHeader(rows) {
+  for (let i = 0; i < Math.min(rows.length, 12); i++)
+    if (rows[i].filter(c => c && toNum(c) === null).length >= 3) return i;
+  return 0;
+}
+/** 머리글 행의 빈 칸(병합 셀) 자리에 다음 행이 글자를 갖고 있으면 2줄 머리글 */
+function guessTwoLine(rows, h) {
+  const a = rows[h] || [], b = rows[h + 1] || [];
+  let n = 0; for (let j = 0; j < b.length; j++) if (!a[j] && b[j] && toNum(b[j]) === null) n++;
+  return n >= 2;
+}
+function headerNames(rows, h, two) {
+  const a = rows[h] || [], b = two ? (rows[h + 1] || []) : [];
+  const width = Math.max(...rows.slice(h, h + 30).map(r => r.length));
+  const names = []; let last = "";
+  for (let j = 0; j < width; j++) {
+    const top = a[j] || ""; if (top) last = top;
+    const sub = b[j] || "";
+    names.push((two && sub ? `${top || last} ${sub}` : top).trim() || `(${j + 1}열)`);
+  }
+  return names;
+}
+function guessMapping(names) {
+  const used = new Set(), map = {};
+  for (const f of GUESS_ORDER) {
+    const def = INV_FIELDS.find(x => x.f === f);
+    const j = names.findIndex((n, j) => !used.has(j) && def.re.test(n));
+    if (j >= 0) { map[f] = j; used.add(j); }
+  }
+  return map;
+}
+function buildInvRows(rows, h, two, map) {
+  const start = h + (two ? 2 : 1);
+  const hdrName = map.name != null ? (rows[h][map.name] || "") : "";
+  const out = [], t = Date.now();
+  for (let i = start; i < rows.length; i++) {
+    const r = rows[i];
+    const get = f => map[f] == null ? "" : (r[map[f]] ?? "");
+    const name = get("name"), code = get("code"), group = get("group");
+    if (!name && !code) continue;                                   // 빈 행·반복 머리글 아래 행
+    if (TOTAL_RE.test(name) || TOTAL_RE.test(group) || (hdrName && name === hdrName)) continue; // 합계·소계·반복 머리글
+    const row = { id: `i${t}_${i}`, group, hogi: get("hogi"), code, name, memo: get("memo") };
+    for (const f of NUM_FIELDS) row[f] = map[f] == null ? null : toNum(get(f));
+    out.push(row);
+  }
+  return out;
+}
+
+/** 한 품목의 출고 가능 수량 계산과 불일치 점검 */
+function invCalc(r) {
+  const inv = S.inventory;
+  const holds = HOLDS.reduce((a, [f]) => a + (r[f] || 0), 0);
+  const calc = r.erp == null ? null : r.erp - holds;
+  const ship = r.actual != null ? r.actual : calc;
+  const diff = r.actual != null && calc != null ? r.actual - calc : null;
+  const msgs = [];
+  const w = t => msgs.push({ level: "warn", t }), info = t => msgs.push({ level: "info", t });
+  if (r.erp != null && r.erp < 0) w(`전산 재고가 음수(${fmtN(r.erp)})입니다 — 데이터 오류 확인`);
+  if (r.open != null && r.open < 0) w(`기초재고가 음수(${fmtN(r.open)})입니다`);
+  if (r.open != null && r.prod != null && r.out != null && r.erp != null) {
+    const exp = r.open + r.prod - r.out;
+    if (Math.abs(exp - r.erp) >= 1) w(`수불 불일치: 기초+생산−출고 = ${fmtN(exp)} ≠ 현재고 ${fmtN(r.erp)}`);
+  }
+  if (holds > 0 && r.erp != null && holds > r.erp) w(`보류 합계(${fmtN(holds)})가 전산 재고(${fmtN(r.erp)})보다 많습니다`);
+  if (diff != null) {
+    const lim = Math.max(+inv.tolAbs || 0, Math.abs(calc) * (+inv.tolPct || 0) / 100);
+    if (Math.abs(diff) > lim) w(`물류 확인 수량이 계산값(${fmtN(calc)})과 ${diff > 0 ? "+" : ""}${fmtN(diff)} 다릅니다`);
+  }
+  if (r.erp > 0 && ship != null && ship <= 0) info("전산 재고는 있지만 출고 가능 수량이 0입니다");
+  else if (holds > 0 && r.erp > 0) info(`전산 재고의 ${Math.round(holds / r.erp * 100)}%(${fmtN(holds)})가 출고 불가 — ${HOLDS.filter(([f]) => r[f] > 0).map(([, l]) => l).join("·")}`);
+  const level = msgs.some(m => m.level === "warn") ? "warn" : msgs.length ? "info" : "ok";
+  return { holds, calc, ship, diff, msgs, level };
+}
+
+const curSnap = () => S.inventory.snapshots.find(s => s.id === S.inventory.currentId);
+let invFilter = "all", invQ = "";
+function invRowHtml(r) {
+  const c = invCalc(r);
+  const num = f => `<input inputmode="numeric" data-r="${r.id}" data-f="${f}" value="${r[f] ?? ""}" aria-label="${f}">`;
+  const ro = v => `<span class="${v < 0 ? "neg" : ""}">${fmtN(v)}</span>`;
+  const txt = f => r.manual ? `<input class="txt" data-r="${r.id}" data-f="${f}" value="${esc(r[f] || "")}">` : esc(r[f] || "");
+  return `<tr data-id="${r.id}" class="${c.level}">
+    <td>${esc(r.group || "")}${r.hogi ? ` <span class="muted">${esc(r.hogi)}</span>` : ""}</td>
+    <td>${txt("code")}</td><td>${txt("name")}</td>
+    <td class="num">${r.manual ? num("erp") : ro(r.erp)}</td>
+    ${HOLDS.map(([f]) => `<td class="num">${num(f)}</td>`).join("")}
+    <td class="num c-calc">${ro(c.calc)}</td>
+    <td class="num">${num("actual")}</td>
+    <td class="num c-diff">${c.diff ? `<span class="neg">${c.diff > 0 ? "+" : ""}${fmtN(c.diff)}</span>` : ""}</td>
+    <td class="st c-st">${invStatusHtml(c)}</td>
+    <td><input class="txt" data-r="${r.id}" data-f="memo" value="${esc(r.memo || "")}" placeholder="사유·메모"></td></tr>`;
+}
+function invStatusHtml(c) {
+  if (c.level === "ok") return `<span class="lv ok">정상</span>`;
+  return (c.level === "warn" ? `<span class="lv warn">확인 필요</span>` : `<span class="lv info">참고</span>`) +
+    c.msgs.map(m => `<div class="${m.level === "warn" ? "w" : "i"}">${m.level === "warn" ? "⚠" : "·"} ${esc(m.t)}</div>`).join("");
+}
+function invSummary(s) {
+  const cs = s.rows.map(r => [r, invCalc(r)]);
+  const sum = f => cs.reduce((a, [r]) => a + (r[f] || 0), 0);
+  return {
+    cs, n: cs.length, erp: sum("erp"), holds: Object.fromEntries(HOLDS.map(([f]) => [f, sum(f)])),
+    holdTotal: cs.reduce((a, [, c]) => a + c.holds, 0), ship: cs.reduce((a, [, c]) => a + (c.ship || 0), 0),
+    warn: cs.filter(([, c]) => c.level === "warn").length, held: cs.filter(([, c]) => c.holds > 0).length,
+    actual: cs.filter(([r]) => r.actual != null).length,
+  };
+}
+function invCardsHtml(sm) {
+  return `
+    <div class="card"><div class="k">전산(ERP) 재고 합계</div><div class="n">${fmtN(sm.erp)}</div><div class="muted">품목 ${sm.n}개</div></div>
+    <div class="card w"><div class="k">출고 불가 (보류 합계)</div><div class="n">${fmtN(sm.holdTotal)}</div><div class="muted">${HOLDS.map(([f, l]) => `${l} ${fmtN(sm.holds[f]) || 0}`).join(" · ")}</div></div>
+    <div class="card"><div class="k">실제 출고 가능 합계</div><div class="n">${fmtN(sm.ship)}</div><div class="muted">물류 확인 수량 우선, 없으면 계산값</div></div>
+    <div class="card ${sm.warn ? "e" : ""}"><div class="k">확인 필요</div><div class="n">${sm.warn}</div><div class="muted">불일치·데이터 오류 품목</div></div>`;
+}
+function renderInvBadge() {
+  const s = curSnap(), cnt = $("#invCnt");
+  const n = s ? s.rows.filter(r => invCalc(r).level === "warn").length : 0;
+  cnt.hidden = !n; cnt.textContent = n;
+}
+function renderInv() {
+  const el = $("#tab-inv"), inv = S.inventory, s = curSnap();
+  renderInvBadge();
+  const intro = `<div class="muted" style="margin-top:6px"><b>실제 출고 가능 = 전산(ERP) 재고 − (품질 보류 + 반품 + 출고 대기 + 기타 보류)</b>. 물류팀이 직접 확인한 수량을 넣으면 계산값과 비교해 다르면 「확인 필요」로 표시합니다.
+    음수 재고, 수불(기초+생산−출고) 불일치, 보류가 재고보다 많은 경우도 함께 점검합니다.</div>`;
+  if (!s) {
+    el.innerHTML = `<div class="panel"><h3>재고 · 실제 출고 가능 수량</h3>${intro}
+      <div class="row" style="margin-top:12px"><button class="primary" id="invNew">물류팀 엑셀 붙여넣기로 입력</button></div></div>`;
+    $("#invNew").addEventListener("click", openInvImport);
+    return;
+  }
+  const sm = invSummary(s);
+  const q = norm(invQ);
+  const list = sm.cs.filter(([r, c]) =>
+    (invFilter === "all" || (invFilter === "warn" && c.level === "warn") || (invFilter === "held" && c.holds > 0) || (invFilter === "actual" && r.actual != null)) &&
+    (!q || norm(`${r.group}${r.hogi}${r.code}${r.name}${r.memo}`).includes(q)));
+  el.innerHTML = `
+    <div class="panel">
+      <div class="invbar">
+        <h3 style="margin:0">재고 · 실제 출고 가능 수량</h3>
+        <select id="invSnap" aria-label="기준일">${[...inv.snapshots].sort((a, b) => b.date.localeCompare(a.date)).map(x =>
+          `<option value="${x.id}" ${x.id === s.id ? "selected" : ""}>${mdw(x.date)} · ${esc(x.source)} · ${x.rows.length}품목</option>`).join("")}</select>
+        <button class="primary" id="invNew">엑셀 붙여넣기로 새로 입력</button>
+        <button id="invAdd">행 추가</button>
+        <button id="invCsv">CSV 내보내기</button>
+        <button class="danger" id="invDel">이 기준일 삭제</button>
+      </div>
+      ${intro}
+      <div class="muted">가져온 시각 ${fmtDT(s.importedAt)}${s.by ? ` · ${esc(s.by)}` : ""}. 보류 수량·물류 확인 수량·메모는 표에서 바로 입력할 수 있고 자동 저장됩니다.</div>
+    </div>
+    <div class="cards" id="invCards">${invCardsHtml(sm)}</div>
+    <div class="filters">
+      ${[["all", `전체 ${sm.n}`], ["warn", `확인 필요 ${sm.warn}`], ["held", `보류 있음 ${sm.held}`], ["actual", `물류 확인 입력 ${sm.actual}`]]
+        .map(([k, l]) => `<button class="chip ${invFilter === k ? "on" : ""}" data-if="${k}">${l}</button>`).join("")}
+      <input type="search" id="invQ" placeholder="품번·품명·공정 검색" value="${esc(invQ)}">
+      <span class="row tolrow muted">허용 오차 <input type="number" min="0" id="invTolAbs" value="${inv.tolAbs || 0}" aria-label="허용 오차 수량">개 또는 <input type="number" min="0" step="0.1" id="invTolPct" value="${inv.tolPct || 0}" aria-label="허용 오차 비율">%</span>
+    </div>
+    <div class="tblwrap inv"><table class="tbl inv">
+      <tr><th>공정</th><th>품번</th><th>품명</th><th>전산 재고</th>${HOLDS.map(([, l]) => `<th>${l}</th>`).join("")}<th>계산 출고가능</th><th>물류 확인<br>출고가능</th><th>차이</th><th>상태</th><th>비고·사유</th></tr>
+      ${list.map(([r]) => invRowHtml(r)).join("") || `<tr><td colspan="13" class="empty">해당하는 품목이 없습니다.</td></tr>`}
+    </table></div>`;
+
+  $("#invSnap").addEventListener("change", e => { inv.currentId = e.target.value; save(); renderInv(); });
+  $("#invNew").addEventListener("click", openInvImport);
+  $("#invAdd").addEventListener("click", () => {
+    const r = { id: "m" + Date.now(), manual: true, group: "", hogi: "", code: "", name: "", memo: "" };
+    NUM_FIELDS.forEach(f => r[f] = null);
+    s.rows.unshift(r); invFilter = "all"; invQ = ""; save(); renderInv();
+    document.querySelector(`#tab-inv input[data-r="${r.id}"][data-f="name"]`)?.focus();
+  });
+  $("#invCsv").addEventListener("click", () => exportInvCsv(s));
+  $("#invDel").addEventListener("click", () => {
+    if (!confirm(`${mdw(s.date)} 재고(${s.rows.length}품목)를 삭제할까요?`)) return;
+    inv.snapshots = inv.snapshots.filter(x => x.id !== s.id);
+    inv.currentId = [...inv.snapshots].sort((a, b) => b.date.localeCompare(a.date))[0]?.id || null;
+    save(); renderInv();
+  });
+  el.querySelectorAll("[data-if]").forEach(b => b.addEventListener("click", () => { invFilter = b.dataset.if; renderInv(); }));
+  const qi = $("#invQ");
+  qi.addEventListener("input", () => { invQ = qi.value; renderInv(); const n = $("#invQ"); n.focus(); n.setSelectionRange(n.value.length, n.value.length); });
+  const tol = () => { inv.tolAbs = +$("#invTolAbs").value || 0; inv.tolPct = +$("#invTolPct").value || 0; save(); renderInv(); };
+  $("#invTolAbs").addEventListener("change", tol); $("#invTolPct").addEventListener("change", tol);
+}
+// 표 안 입력: 행 전체를 다시 그리지 않고 계산 칸만 갱신 (Tab 이동 시 포커스 유지)
+$("#tab-inv").addEventListener("change", e => {
+  const inp = e.target.closest("input[data-r]"); if (!inp) return;
+  const s = curSnap(); const r = s?.rows.find(x => x.id === inp.dataset.r); if (!r) return;
+  const f = inp.dataset.f;
+  if (NUM_FIELDS.includes(f)) {
+    const v = toNum(inp.value);
+    if (inp.value.trim() && v == null) { toast("숫자를 입력하세요."); inp.value = r[f] ?? ""; return; }
+    r[f] = v;
+  } else r[f] = inp.value.trim();
+  r.editedAt = Date.now();
+  save();
+  const c = invCalc(r), tr = inp.closest("tr");
+  tr.className = c.level;
+  tr.querySelector(".c-calc").innerHTML = `<span class="${c.calc < 0 ? "neg" : ""}">${fmtN(c.calc)}</span>`;
+  tr.querySelector(".c-diff").innerHTML = c.diff ? `<span class="neg">${c.diff > 0 ? "+" : ""}${fmtN(c.diff)}</span>` : "";
+  tr.querySelector(".c-st").innerHTML = invStatusHtml(c);
+  $("#invCards").innerHTML = invCardsHtml(invSummary(s));
+  renderInvBadge();
+});
+function exportInvCsv(s) {
+  const q = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const head = ["공정", "호기", "품번", "품명", "전산재고", ...HOLDS.map(([, l]) => l), "계산 출고가능", "물류 확인 출고가능", "차이", "상태", "점검 내용", "비고"];
+  const lines = [head.map(q).join(",")];
+  for (const r of s.rows) {
+    const c = invCalc(r);
+    lines.push([r.group, r.hogi, r.code, r.name, r.erp, ...HOLDS.map(([f]) => r[f]), c.calc, r.actual, c.diff,
+      { ok: "정상", info: "참고", warn: "확인 필요" }[c.level], c.msgs.map(m => m.t).join(" / "), r.memo].map(q).join(","));
+  }
+  download(`출고가능재고_${s.date}.csv`, "﻿" + lines.join("\r\n"), "text/csv;charset=utf-8");
+}
+
+/* --- 가져오기 대화상자 --- */
+let invRaw = null;
+function openInvImport() {
+  invRaw = null; $("#invForm").reset();
+  $("#invDate").value = iso(new Date()); $("#invSource").value = "물류팀 엑셀";
+  $("#invMapWrap").hidden = true; $("#invOk").disabled = true; $("#invInfo").textContent = "";
+  $("#invSample").hidden = !MASTER.sampleInventory;
+  $("#invDlg").showModal(); $("#invPaste").focus();
+}
+function loadInvRaw(rows, info) {
+  if (!rows.length) { toast("표 내용을 찾지 못했습니다."); return; }
+  invRaw = rows;
+  const h = guessHeader(rows);
+  $("#invHeader").innerHTML = rows.slice(0, 12).map((r, i) =>
+    `<option value="${i}">${i + 1}행: ${esc(r.filter(Boolean).slice(0, 7).join(" | ").slice(0, 90))}</option>`).join("");
+  $("#invHeader").value = String(h);
+  $("#invTwo").checked = guessTwoLine(rows, h);
+  $("#invInfo").textContent = info;
+  $("#invMapWrap").hidden = false;
+  buildInvMap(true);
+}
+function invHeaderState() { return { h: +$("#invHeader").value, two: $("#invTwo").checked }; }
+function buildInvMap(guess) {
+  const { h, two } = invHeaderState();
+  const names = headerNames(invRaw, h, two);
+  const map = guess ? (S.inventory.mappings[names.join("|")] || guessMapping(names)) : readInvMap();
+  $("#invMap").innerHTML = INV_FIELDS.map(d => `<label>${d.label}<select data-map="${d.f}"><option value="">— 없음 —</option>${
+    names.map((n, j) => `<option value="${j}" ${map[d.f] === j ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></label>`).join("");
+  previewInv();
+}
+function readInvMap() {
+  const m = {};
+  document.querySelectorAll("#invMap select").forEach(s => { if (s.value !== "") m[s.dataset.map] = +s.value; });
+  return m;
+}
+function previewInv() {
+  const { h, two } = invHeaderState(), map = readInvMap();
+  const rows = buildInvRows(invRaw, h, two, map);
+  const ok = (map.name != null || map.code != null) && (map.erp != null || map.actual != null) && rows.length > 0;
+  $("#invOk").disabled = !ok;
+  $("#invCount").textContent = ok ? `품목 ${rows.length}행을 가져옵니다 (합계·소계·빈 행·반복 머리글 제외). 아래는 앞부분 미리보기입니다.`
+    : "「품명」(또는 품번)과 「전산(ERP) 재고」(또는 물류 확인 출고가능) 열을 지정해 주세요.";
+  const cols = INV_FIELDS.filter(d => map[d.f] != null);
+  $("#invPreview").innerHTML = `<tr>${cols.map(d => `<th>${esc(d.label.replace(" *", ""))}</th>`).join("")}</tr>` +
+    rows.slice(0, 8).map(r => `<tr>${cols.map(d => `<td class="${NUM_FIELDS.includes(d.f) ? "num" : ""}">${esc(NUM_FIELDS.includes(d.f) ? fmtN(r[d.f]) : r[d.f])}</td>`).join("")}</tr>`).join("");
+}
+$("#invPaste").addEventListener("input", e => { const v = e.target.value; if (v.trim()) loadInvRaw(parseTable(v), `붙여넣은 표 ${parseTable(v).length}행`); });
+$("#invFile").addEventListener("change", async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const u8 = new Uint8Array(await f.arrayBuffer());
+    if ((u8[0] === 0x50 && u8[1] === 0x4B) || (u8[0] === 0xD0 && u8[1] === 0xCF))
+      throw new Error("엑셀 원본(.xlsx/.xls) 파일은 직접 읽을 수 없습니다. 엑셀에서 표를 복사해 붙여넣거나 CSV로 저장해 주세요.");
+    let text = new TextDecoder("utf-8").decode(u8);
+    if (text.includes(" ")) text = new TextDecoder("euc-kr").decode(u8); // ERP 내보내기(CP949)
+    loadInvRaw(parseTable(text.replace(/^﻿/, "")), `${f.name} · ${parseTable(text).length}행`);
+    $("#invSource").value = f.name;
+  } catch (err) { toast(err.message); }
+});
+$("#invSample").addEventListener("click", () => {
+  const sp = MASTER.sampleInventory;
+  $("#invDate").value = sp.date; $("#invSource").value = sp.source;
+  loadInvRaw(sp.table.map(r => [...r]), `샘플 「${sp.source}」 ${sp.table.length}행`);
+});
+$("#invHeader").addEventListener("change", () => { $("#invTwo").checked = guessTwoLine(invRaw, +$("#invHeader").value); buildInvMap(true); });
+$("#invTwo").addEventListener("change", () => buildInvMap(true));
+$("#invMap").addEventListener("change", previewInv);
+$("#invCancel").addEventListener("click", () => $("#invDlg").close());
+$("#invForm").addEventListener("submit", ev => {
+  const { h, two } = invHeaderState(), map = readInvMap();
+  const rows = buildInvRows(invRaw, h, two, map);
+  const date = $("#invDate").value, source = $("#invSource").value.trim() || "물류팀 엑셀";
+  if (!date) { ev.preventDefault(); toast("기준일을 입력하세요."); return; }
+  const inv = S.inventory;
+  const same = inv.snapshots.find(x => x.date === date && x.source === source);
+  if (same && !confirm(`${mdw(date)} 「${source}」 재고가 이미 있습니다. 새 내용으로 바꿀까요?`)) { ev.preventDefault(); return; }
+  inv.mappings[headerNames(invRaw, h, two).join("|")] = map; // 같은 양식은 다음부터 자동으로 같은 짝
+  const snap = { id: same?.id || "s" + Date.now(), date, source, importedAt: Date.now(), by: S.settings.author, rows };
+  inv.snapshots = inv.snapshots.filter(x => x.id !== snap.id).concat(snap);
+  inv.currentId = snap.id; invFilter = "all"; invQ = "";
+  save(); renderInv(); switchTab("inv");
+  const warn = rows.filter(r => invCalc(r).level === "warn").length;
+  toast(`${rows.length}품목을 가져왔습니다.${warn ? ` 확인 필요 ${warn}건` : ""}`);
+});
+
+/* ===================== 교체시간 데이터 탭 ===================== */
+const CH_FIELDS = [
+  { f: "date", label: "날짜", re: /날짜|일자|일시/ },
+  { f: "machine", label: "설비·호기", re: /설비|호기|라인/ },
+  { f: "product", label: "교체 후 품목 *", re: /품목|품명|제품/ },
+  { f: "type", label: "교체 유형", re: /유형|구분|종류|방식/ },
+  { f: "hours", label: "소요시간 *", re: /시간|소요|분/ },
+  { f: "workers", label: "투입 인원", re: /인원|명/ },
+  { f: "memo", label: "비고", re: /비고|메모|사유/ },
+];
+function guessMap(names, fields) {
+  const used = new Set(), map = {};
+  for (const d of fields) {
+    const j = names.findIndex((n, j) => !used.has(j) && d.re.test(n));
+    if (j >= 0) { map[d.f] = j; used.add(j); }
+  }
+  return map;
+}
+/** '04', '4호기', 'S4', 'B-1', '음성 B1' 등 → 설비 키 */
+function machineFromText(t) {
+  const s = String(t || "").replace(/\s|호기/g, "").toUpperCase();
+  if (!s) return "";
+  const eum = s.includes("음성"), core = s.replace("음성", "").replace("오창", "").replace(/-/g, "");
+  if (/^\d{1,2}$/.test(core)) { const k = `OC-P1-${core.padStart(2, "0")}`; return MK[k] ? k : ""; }
+  const cands = MACHINES.filter(m => m.id.replace(/[\s-]/g, "").toUpperCase() === core);
+  return (cands.find(m => (m.site === "음성") === eum) || cands[0])?.key || "";
+}
+function parseHours(v, unit) {
+  const s = String(v ?? "").replace(/\s/g, "");
+  if (!s) return null;
+  const h = s.match(/(\d+(?:\.\d+)?)(시간|h|H)/), m = s.match(/(\d+(?:\.\d+)?)(분|m|M)/);
+  if (h || m) return (h ? +h[1] : 0) + (m ? +m[1] / 60 : 0);
+  const n = toNum(s);
+  return n == null ? null : unit === "min" ? n / 60 : n;
+}
+function parseType(v) {
+  const s = String(v || "").toLowerCase();
+  if (/full|풀|전체|full\s*set|fs/.test(s)) return "full";
+  if (/blow|블로|bm/.test(s)) return "blow";
+  return "etc";
+}
+function parseDate(v) {
+  const s = String(v || "").trim();
+  let m = s.match(/^(\d{4})[-./](\d{1,2})[-./](\d{1,2})/);
+  if (m) return `${m[1]}-${pad(+m[2])}-${pad(+m[3])}`;
+  m = s.match(/^(\d{1,2})[/.](\d{1,2})$/);
+  if (m) return `${new Date().getFullYear()}-${pad(+m[1])}-${pad(+m[2])}`;
+  return s || iso(new Date());
+}
+const machineOptionsWithAny = () => `<option value="">설비 무관 (모든 설비 공통)</option>` + machineOptions();
+let chRaw = null, chQ = "";
+
+function buildChTab() {
+  const el = $("#tab-chg");
+  const st = S.settings;
+  el.innerHTML = `
+    <div class="panel">
+      <h3>제품별 금형 교체시간 데이터</h3>
+      <div class="muted">현장 직원이 교체할 때마다 <b>어느 설비에서, 어떤 품목으로 바꾸는 데, 몇 시간·몇 명</b>이 들었는지 기록합니다. 기록이 쌓이면 품목·설비별 대표값을 계산해
+        계획표의 교체시간과 생산 손실량에 자동으로 반영합니다. 적용 순서: 칸에서 직접 지정 → 금형 그룹(교체 없음·시간 지정) → <b>교체시간 데이터</b> → 설정의 기본값.</div>
+      <div class="row" style="margin-top:10px">
+        <label class="muted" for="chStat">대표값</label>
+        <select id="chStat"><option value="median">중앙값 (튀는 기록에 강함, 권장)</option><option value="avg">평균</option><option value="max">최댓값 (보수적)</option></select>
+        <label class="muted" for="chMinN">최소 기록 수</label><input id="chMinN" type="number" min="1" style="width:70px">
+        <label class="muted"><input type="checkbox" id="chOther"> 이 설비 기록이 없으면 다른 설비 기록도 사용</label>
+      </div>
+    </div>
+    <datalist id="dlChProducts"></datalist>
+    <div class="rulecols">
+      <div class="panel">
+        <h3>① 한 건씩 기록</h3>
+        <form class="rf" id="chForm" autocomplete="off">
+          <label for="chDate">날짜</label><input id="chDate" type="date" required>
+          <label for="chMachine">설비</label><select id="chMachine">${machineOptionsWithAny()}</select>
+          <label for="chProduct">교체 후 품목</label><input id="chProduct" list="dlChProducts" required placeholder="이 품목으로 바꾸는 데 걸린 시간">
+          <label for="chType">교체 유형</label>
+          <select id="chType"><option value="full">Full Set</option><option value="blow">Blow Mold</option><option value="etc">기타·미지정</option></select>
+          <label for="chH">소요시간</label>
+          <div class="row"><input id="chH" type="number" min="0" step="1" style="width:80px" placeholder="0"> 시간 <input id="chM" type="number" min="0" max="59" step="5" style="width:80px" placeholder="0"> 분</div>
+          <label for="chWorkers">투입 인원</label><div class="row"><input id="chWorkers" type="number" min="0" style="width:80px"> 명</div>
+          <label for="chMemo">비고</label><input id="chMemo" placeholder="예: 시운전 포함, 금형 세척 지연">
+          <label for="chBy">기록자</label><input id="chBy">
+          <div class="full row"><button type="submit" class="primary">기록 추가</button></div>
+        </form>
+      </div>
+      <div class="panel">
+        <h3>② 엑셀 기록 한꺼번에 넣기</h3>
+        <div class="muted" style="margin-bottom:6px">직원이 정리한 엑셀 표(머리글 포함)를 복사해 붙여넣으세요. 예: 날짜 | 설비 | 품목 | 유형 | 소요시간 | 인원 | 비고.
+          소요시간은 「2.5」, 「2시간 30분」, 「150분」 모두 읽습니다.</div>
+        <textarea id="chPaste" rows="4" style="width:100%" placeholder="여기를 누르고 Ctrl+V"></textarea>
+        <div id="chMapWrap" hidden>
+          <div class="mapgrid" id="chMap"></div>
+          <div class="row"><label class="muted" for="chUnit">숫자만 있을 때 단위</label>
+            <select id="chUnit"><option value="hour">시간</option><option value="min">분</option></select></div>
+          <div class="muted" id="chCount" style="margin-top:6px"></div>
+          <div class="prevwrap"><table class="tbl" id="chPreview"></table></div>
+          <div class="row" style="margin-top:8px"><button class="primary" id="chImport" disabled>가져오기</button><button id="chPasteClear">지우기</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel"><h3>현재 계획에 미치는 영향 <span class="muted" id="chPlanName"></span></h3><div id="chImpact"></div></div>
+    <div class="panel"><h3>품목·설비별 분석</h3><div style="overflow:auto" id="chAnalysis"></div></div>
+    <div class="panel"><h3>기록 목록</h3>
+      <div class="row" style="margin-bottom:6px"><input type="search" id="chQ" placeholder="품목·설비·비고 검색"><button id="chCsv">CSV 내보내기</button></div>
+      <div style="overflow:auto" id="chRecords"></div></div>`;
+  el.dataset.built = "1";
+
+  $("#chStat").value = st.chStat; $("#chMinN").value = st.chMinN; $("#chOther").checked = !!st.chOtherMachines;
+  const setSt = () => { S.settings.chStat = $("#chStat").value; S.settings.chMinN = Math.max(1, +$("#chMinN").value || 1); S.settings.chOtherMachines = $("#chOther").checked; save(); renderAll(); };
+  ["#chStat", "#chMinN", "#chOther"].forEach(s => $(s).addEventListener("change", setSt));
+
+  const fillProducts = () => {
+    const k = $("#chMachine").value;
+    const names = k ? productsOf(k).map(p => p.name) : [...new Set(MACHINES.flatMap(m => productsOf(m.key).map(p => p.name)))].sort();
+    $("#dlChProducts").innerHTML = names.map(n => `<option value="${esc(n)}">`).join("");
+  };
+  $("#chMachine").addEventListener("change", fillProducts); fillProducts();
+  const resetForm = () => { $("#chForm").reset(); $("#chDate").value = iso(new Date()); $("#chBy").value = S.settings.author || ""; fillProducts(); };
+  resetForm();
+  $("#chForm").addEventListener("submit", ev => {
+    ev.preventDefault();
+    const hours = (+$("#chH").value || 0) + (+$("#chM").value || 0) / 60;
+    if (!(hours > 0)) { toast("소요시간을 입력하세요."); return; }
+    S.changeovers.push({ id: "c" + Date.now(), date: $("#chDate").value, machine: $("#chMachine").value, product: $("#chProduct").value.trim(),
+      type: $("#chType").value, hours: r2(hours), workers: +$("#chWorkers").value || null, memo: $("#chMemo").value.trim(),
+      by: $("#chBy").value.trim(), at: Date.now() });
+    const keep = { m: $("#chMachine").value, t: $("#chType").value };
+    resetForm(); $("#chMachine").value = keep.m; $("#chType").value = keep.t; fillProducts();
+    save(); renderAll(); toast("교체시간을 기록했습니다. 계획표에 바로 반영됩니다.");
+  });
+
+  $("#chPaste").addEventListener("input", () => {
+    const v = $("#chPaste").value; if (!v.trim()) { $("#chMapWrap").hidden = true; return; }
+    chRaw = parseTable(v);
+    if (!chRaw.length) return;
+    const h = guessHeader(chRaw), names = headerNames(chRaw, h, false);
+    chRaw.h = h;
+    const map = guessMap(names, CH_FIELDS);
+    $("#chMap").innerHTML = CH_FIELDS.map(d => `<label>${d.label}<select data-cm="${d.f}"><option value="">— 없음 —</option>${
+      names.map((n, j) => `<option value="${j}" ${map[d.f] === j ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></label>`).join("");
+    // '소요시간(분)', '시간[분]', '교체분', 'min' → 분 단위
+    $("#chUnit").value = map.hours != null && /\(\s*분\s*\)|\[\s*분\s*\]|분\s*$|min/i.test(names[map.hours]) ? "min" : "hour";
+    $("#chMapWrap").hidden = false; previewCh();
+  });
+  $("#chMap").addEventListener("change", previewCh);
+  $("#chUnit").addEventListener("change", previewCh);
+  $("#chPasteClear").addEventListener("click", () => { $("#chPaste").value = ""; $("#chMapWrap").hidden = true; chRaw = null; });
+  $("#chImport").addEventListener("click", () => {
+    const { ok } = chRowsFromPaste();
+    const t = Date.now();
+    ok.forEach((r, i) => S.changeovers.push({ ...r, id: `c${t}_${i}`, at: t, by: r.by || S.settings.author || "" }));
+    $("#chPaste").value = ""; $("#chMapWrap").hidden = true; chRaw = null;
+    save(); renderAll(); toast(`교체시간 기록 ${ok.length}건을 가져왔습니다.`);
+  });
+
+  $("#chQ").addEventListener("input", () => { chQ = $("#chQ").value; renderChRecords(); });
+  $("#chCsv").addEventListener("click", () => {
+    const q = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const lines = [["날짜", "설비", "교체 후 품목", "유형", "소요시간(h)", "인원", "비고", "기록자"].map(q).join(",")]
+      .concat(S.changeovers.map(r => [r.date, r.machine ? mlabel(r.machine) : "설비 무관", r.product, CHANGE_LABEL[r.type], r.hours, r.workers, r.memo, r.by].map(q).join(",")));
+    download(`교체시간기록_${iso(new Date())}.csv`, "﻿" + lines.join("\r\n"), "text/csv;charset=utf-8");
+  });
+  el.addEventListener("click", e => {
+    const b = e.target.closest("button[data-chact]"); if (!b) return;
+    if (b.dataset.chact === "del") {
+      if (!confirm("이 기록을 삭제할까요?")) return;
+      S.changeovers = S.changeovers.filter(r => r.id !== b.dataset.id); save(); renderAll();
+    } else if (b.dataset.chact === "pre") {
+      $("#chMachine").value = b.dataset.m; fillProducts(); $("#chProduct").value = b.dataset.p;
+      $("#chForm").scrollIntoView({ block: "center" }); $("#chH").focus();
+    }
+  });
+}
+function chRowsFromPaste() {
+  const m = {}; document.querySelectorAll("#chMap select").forEach(s => { if (s.value !== "") m[s.dataset.cm] = +s.value; });
+  const unit = $("#chUnit").value, ok = [], bad = [];
+  if (!chRaw) return { ok, bad, m };
+  const hdr = chRaw[chRaw.h] || [];
+  for (let i = chRaw.h + 1; i < chRaw.length; i++) {
+    const row = chRaw[i], get = f => m[f] == null ? "" : (row[m[f]] ?? "");
+    if (hdr.length && row.join("|") === hdr.join("|")) continue;
+    const product = get("product").trim(), hours = parseHours(get("hours"), unit);
+    const mtext = get("machine"), machine = machineFromText(mtext);
+    const rec = { date: parseDate(get("date")), machine, machineText: mtext, product, type: parseType(get("type")),
+      hours: hours == null ? null : r2(hours), workers: toNum(get("workers")), memo: get("memo") };
+    if (!product || !(hours > 0)) { if (row.some(Boolean)) bad.push(rec); continue; }
+    if (mtext && !machine) rec.memo = [rec.memo, `설비 「${mtext}」 미확인`].filter(Boolean).join(" · ");
+    ok.push(rec);
+  }
+  return { ok, bad, m };
+}
+function previewCh() {
+  const { ok, bad, m } = chRowsFromPaste();
+  const unknownM = ok.filter(r => r.machineText && !r.machine).length;
+  const tooLong = ok.filter(r => r.hours > 24).length;
+  const valid = m.product != null && m.hours != null && ok.length > 0;
+  $("#chImport").disabled = !valid;
+  $("#chCount").innerHTML = valid
+    ? `기록 ${ok.length}건을 가져옵니다.${bad.length ? ` 품목·시간이 비었거나 읽을 수 없는 ${bad.length}행은 제외합니다.` : ""}${unknownM ? ` <span style="color:var(--warn)">설비를 찾지 못한 ${unknownM}건은 「설비 무관」으로 저장합니다.</span>` : ""}${tooLong ? ` <span style="color:var(--err)">⚠ 24시간이 넘는 기록이 ${tooLong}건 있습니다 — 단위(시간/분)를 확인하세요.</span>` : ""}`
+    : "「교체 후 품목」과 「소요시간」 열을 지정해 주세요.";
+  $("#chPreview").innerHTML = `<tr><th>날짜</th><th>설비</th><th>품목</th><th>유형</th><th>시간</th><th>인원</th></tr>` +
+    ok.slice(0, 8).map(r => `<tr><td>${esc(r.date)}</td><td>${r.machine ? esc(mlabel(r.machine)) : `<span class="muted">${esc(r.machineText || "설비 무관")}</span>`}</td>
+      <td>${esc(r.product)}</td><td>${CHANGE_LABEL[r.type]}</td><td class="num">${r.hours}</td><td class="num">${r.workers ?? ""}</td></tr>`).join("");
+}
+
+function renderCh() {
+  if (!$("#tab-chg").dataset.built) buildChTab();
+  const st = S.settings;
+  // 분석: 품목 × 설비별
+  const groups = new Map();
+  for (const r of S.changeovers) {
+    const k = r.machine || "";
+    const id = `${k}|${r.machine ? ident(k, r.product) : norm(r.product)}`;
+    if (!groups.has(id)) groups.set(id, { machine: k, product: r.machine ? (matchProduct(k, r.product)?.name || r.product) : r.product, recs: [] });
+    groups.get(id).recs.push(r);
+  }
+  const rows = [...groups.values()].sort((a, b) => a.product.localeCompare(b.product, "ko") || a.machine.localeCompare(b.machine));
+  $("#chAnalysis").innerHTML = rows.length ? `<table class="tbl"><tr><th>교체 후 품목</th><th>설비</th><th>기록</th><th>적용값 (${STAT_LABEL[st.chStat]})</th><th>평균</th><th>범위</th><th>유형</th><th>평균 인원</th><th>최근</th><th>점검</th></tr>${rows.map(g => {
+    const hs = g.recs.map(r => +r.hours), med = statOf(hs, "median"), avg = statOf(hs, "avg");
+    const mn = Math.min(...hs), mx = Math.max(...hs), ws = g.recs.map(r => +r.workers).filter(x => x > 0);
+    const types = Object.entries(g.recs.reduce((a, r) => (a[r.type] = (a[r.type] || 0) + 1, a), {})).map(([t, n]) => `${CHANGE_LABEL[t]} ${n}`).join(", ");
+    const spread = g.recs.length >= 3 && med > 0 && (mx - mn) / med > 0.5;
+    const enough = g.recs.length >= (+st.chMinN || 1);
+    return `<tr><td><b>${esc(g.product)}</b></td><td>${esc(mlabel(g.machine))}</td><td class="num">${g.recs.length}건</td>
+      <td class="num"><b>${r2(statOf(hs, st.chStat))}시간</b></td><td class="num">${r2(avg)}</td><td class="num">${r2(mn)} ~ ${r2(mx)}</td><td>${esc(types)}</td>
+      <td class="num">${ws.length ? r2(ws.reduce((a, b) => a + b, 0) / ws.length) + "명" : "-"}</td><td>${esc(g.recs.map(r => r.date).sort().at(-1) || "")}</td>
+      <td>${!enough ? `<span class="lv info">기록 부족</span>` : spread ? `<span class="lv warn">편차 큼</span> <span class="pl">기록 확인 필요</span>` : `<span class="lv ok">반영 중</span>`}</td></tr>`;
+  }).join("")}</table>` : `<div class="muted">아직 기록이 없습니다. 위에서 한 건씩 기록하거나 엑셀 표를 붙여넣으세요.</div>`;
+
+  // 현재 계획 영향
+  const p = cur();
+  $("#chPlanName").textContent = p ? `· ${mdw(p.start)} ~ ${mdw(addDays(p.start, DAYS - 1))} Rev.${p.rev}` : "";
+  if (!p) { $("#chImpact").innerHTML = `<div class="muted">계획이 없습니다.</div>`; renderChRecords(); return; }
+  const V = validate(p);
+  const need = new Map(), byProd = new Map();
+  let defLoss = 0;
+  for (const m of MACHINES) for (const c of V.tls[m.key]) {
+    if (c.change === "none") continue;
+    const pk = `${m.key}|${ident(m.key, c.cur.text)}`;
+    const bp = byProd.get(pk) || { m, product: c.cur.text, n: 0, h: 0, q: 0, data: !!c.changeEst };
+    bp.n++; bp.h += c.lossH; bp.q += c.lostQty || 0; byProd.set(pk, bp);
+    defLoss += hoursOf(c.change in { full: 1, blow: 1 } ? c.change : st.defaultChange);
+    if (c.changeNoData) { const x = need.get(pk) || { m, product: c.cur.text, n: 0 }; x.n++; need.set(pk, x); }
+  }
+  const top = [...byProd.values()].sort((a, b) => b.h - a.h).slice(0, 10);
+  $("#chImpact").innerHTML = `
+    <div class="cards">
+      <div class="card"><div class="k">금형 교체</div><div class="n">${V.changes}회</div><div class="muted">데이터 적용 ${V.dataChanges}회 · 기본값 ${V.changes - V.dataChanges}회</div></div>
+      <div class="card w"><div class="k">가동시간 손실</div><div class="n">${V.loss}시간</div><div class="muted">기본값만 썼다면 ${r2(defLoss)}시간</div></div>
+      <div class="card w"><div class="k">교체로 인한 생산 손실</div><div class="n">≈${fmtQ(V.lostQty) || 0}본</div><div class="muted">손실 시간 × 일 Capa ÷ 24 (Capa 있는 품목만)</div></div>
+      <div class="card ${need.size ? "e" : ""}"><div class="k">데이터가 필요한 전환</div><div class="n">${need.size}건</div><div class="muted">이 품목들의 교체시간을 기록하면 계획이 더 정확해집니다</div></div>
+    </div>
+    ${top.length ? `<h4 style="margin:6px 0">교체 손실이 큰 품목 (상위 ${top.length})</h4><div style="overflow:auto"><table class="tbl"><tr><th>설비</th><th>교체 후 품목</th><th>횟수</th><th>손실 시간</th><th>생산 손실</th><th>근거</th><th></th></tr>${top.map(x =>
+      `<tr><td>${esc(mname(x.m))}</td><td>${esc(x.product)}</td><td class="num">${x.n}</td><td class="num">${r2(x.h)}시간</td><td class="num">${x.q ? "≈" + fmtQ(x.q) + "본" : "-"}</td>
+       <td>${x.data ? `<span class="lv ok">데이터</span>` : `<span class="lv info">기본값</span>`}</td>
+       <td>${x.data ? "" : `<button data-chact="pre" data-m="${x.m.key}" data-p="${esc(x.product)}">기록하기</button>`}</td></tr>`).join("")}</table></div>` : `<div class="muted">이 계획에는 금형 교체가 없습니다.</div>`}`;
+  renderChRecords();
+}
+function renderChRecords() {
+  const q = norm(chQ);
+  const list = [...S.changeovers].reverse().filter(r => !q || norm(`${r.product}${r.machine ? mlabel(r.machine) : "설비무관"}${r.memo}${r.by}`).includes(q));
+  $("#chRecords").innerHTML = list.length ? `<table class="tbl"><tr><th>날짜</th><th>설비</th><th>교체 후 품목</th><th>유형</th><th>시간</th><th>인원</th><th>비고</th><th>기록자</th><th></th></tr>${list.slice(0, 200).map(r =>
+    `<tr><td>${esc(r.date)}</td><td>${r.machine ? esc(mlabel(r.machine)) : "설비 무관"}</td><td>${esc(r.product)}</td><td>${CHANGE_LABEL[r.type] || "-"}</td>
+     <td class="num">${r.hours}</td><td class="num">${r.workers ?? ""}</td><td>${esc(r.memo || "")}</td><td>${esc(r.by || "")}</td>
+     <td><button class="danger" data-chact="del" data-id="${r.id}">삭제</button></td></tr>`).join("")}</table>${list.length > 200 ? `<div class="muted">최근 200건만 표시합니다 (전체 ${list.length}건).</div>` : ""}`
+    : `<div class="muted">${S.changeovers.length ? "검색 결과가 없습니다." : "기록이 없습니다."}</div>`;
+}
+
+/* ===================== 금형·배치 규칙 탭 ===================== */
+const RULE_EXAMPLES = {
+  groups: [
+    { name: "02호기 1.8L HD N형 (색상만 변경)", machines: ["OC-P1-02"], products: ["# 1.8L HD - N - RED", "# 1.8L HD - N - YELLOW", "# 1.8L HD - N - GOLD"],
+      inChange: "none", hours: "", count: "", memo: "예시: 같은 N형 금형에서 색상만 바뀐다고 가정 — 실제 여부는 팀장님 확인 필요" },
+    { name: "B-2 1.8L HD 공용 (원터치 65g)", machines: ["OC-S2-B-2"], products: ["신SP 1.8L - 골드펄", "매일 1.8L PET HD", "신SP 1.8L- PET HD", "신SP 1.8L- 검정 HD"],
+      inChange: "blow", hours: "", count: "", memo: "예시: 같은 프리폼(원터치 65g)을 써서 Blow Mold만 교체한다고 가정" },
+  ],
+  rules: [
+    { type: "minRun", machines: ["OC-S2-S4"], a: "미림 1.8L", b: "", n: 21, level: "warn", memo: "예시: 기준정보 비고 'S4 1캐비티 미림 운영 시 연속 3주 가동'" },
+    { type: "weekend", machines: [], a: "", b: "", n: "", level: "info", memo: "예시: 주말 인원 부족 시 교체 자제" },
+  ],
+};
+const machineOptions = () => TEAMS.map(t => `<optgroup label="${esc(t)}">${MACHINES.filter(m => m.team === t)
+  .map(m => `<option value="${m.key}">${esc(mname(m))} · ${esc(m.equip || "-")}</option>`).join("")}</optgroup>`).join("");
+const machinesLabel = keys => !keys?.length ? "전체 설비" : keys.map(k => MK[k] ? mname(MK[k]) : k).join(", ");
+const selectedVals = sel => [...sel.selectedOptions].map(o => o.value);
+const setSelected = (sel, vals) => [...sel.options].forEach(o => o.selected = (vals || []).includes(o.value));
+let groupEditId = null, ruleEditId = null;
+
+function buildRulesTab() {
+  const el = $("#tab-rules");
+  el.innerHTML = `
+    <div class="panel">
+      <h3>금형 관계와 배치 규칙</h3>
+      <div class="muted">여기에 넣은 규칙은 바로 계획표에 적용됩니다. ① 품목이 바뀔 때 교체시간 자동 판단, ② 계획표의 「규칙 위반」 표시, ③ 검증 결과 탭과 확정 전 경고, ④ 칸 편집 창의 미리 알림.
+      교체 유형은 <b>칸에서 직접 지정</b> → <b>금형 그룹</b> → <b>설정의 기본값</b> 순서로 정해집니다.</div>
+      <div class="row" style="margin-top:8px"><button id="btnRuleEx">예시 규칙 불러오기</button><span class="muted">기준정보 비고와 생산배대를 참고한 예시입니다. 실제 기준은 팀장님 확인 후 고쳐 쓰세요.</span></div>
+    </div>
+    <datalist id="dlAllProducts"></datalist>
+    <div class="rulecols">
+      <div class="panel">
+        <h3>① 금형 그룹 <span class="muted">같은 금형(또는 프리폼)을 함께 쓰는 품목 묶음</span></h3>
+        <form class="rf" id="gForm" autocomplete="off">
+          <label for="gName">그룹 이름</label><input id="gName" required placeholder="예: 1.8L HD 핸들 공용">
+          <label for="gMachines">적용 설비</label>
+          <div><select id="gMachines" multiple>${machineOptions()}</select><div class="muted">Ctrl(⌘)을 누르고 여러 대 선택. 아무것도 고르지 않으면 전체 설비.</div></div>
+          <label for="gProducts">품목 (한 줄에 하나)</label>
+          <div><textarea id="gProducts" rows="4" placeholder="# 1.8L HD - N - RED&#10;# 1.8L HD - N - YELLOW"></textarea>
+            <div class="row" style="margin-top:4px"><input id="gPick" list="dlAllProducts" placeholder="기준정보에서 찾아 추가" style="flex:1;min-width:140px"><button type="button" id="gPickAdd">추가</button></div></div>
+          <label for="gChange">그룹 안 품목끼리 전환</label>
+          <div><select id="gChange">
+              <option value="none">교체 없음 (색상·라벨만 변경)</option><option value="blow">Blow Mold 교체</option>
+              <option value="full">Full Set 교체</option><option value="custom">시간 직접 입력</option></select>
+            <input id="gHours" type="number" min="0" step="0.5" placeholder="교체 시간(시간)" style="margin-top:4px" hidden></div>
+          <label for="gCount">보유 금형 수</label><div><input id="gCount" type="number" min="0" placeholder="예: 2 (비우면 검사 안 함)"><div class="muted">이 그룹 품목을 동시에 생산할 수 있는 설비 수. 넘으면 경고합니다.</div></div>
+          <label for="gMemo">메모</label><input id="gMemo" placeholder="출처·근거 등">
+          <div class="full row"><button type="submit" class="primary" id="gSave">그룹 추가</button><button type="button" id="gClear">새로 작성</button></div>
+        </form>
+      </div>
+      <div class="panel">
+        <h3>② 배치 규칙</h3>
+        <form class="rf" id="rForm" autocomplete="off">
+          <label for="rType">규칙 종류</label>
+          <select id="rType">
+            <option value="deny">설비 생산 불가 — 이 설비에서 이 품목 생산 금지</option>
+            <option value="minRun">최소 연속 생산일수 — 시작하면 N일 이상 연속</option>
+            <option value="seq">전환 순서 금지 — A 바로 다음에 B 불가</option>
+            <option value="weekend">주말 금형 교체 금지 — 토·일 교체 불가</option>
+          </select>
+          <label for="rMachines">적용 설비</label>
+          <div><select id="rMachines" multiple>${machineOptions()}</select><div class="muted">아무것도 고르지 않으면 전체 설비.</div></div>
+          <label for="rA" id="rALabel">품목</label><input id="rA" list="dlAllProducts" placeholder="품목명">
+          <label for="rB" id="rBLabel">다음 품목 (B)</label><input id="rB" list="dlAllProducts" placeholder="A 직후에 오면 안 되는 품목">
+          <label for="rN" id="rNLabel">최소 일수</label><input id="rN" type="number" min="2" placeholder="예: 21">
+          <label for="rLevel">수준</label>
+          <select id="rLevel"><option value="warn">경고 — 확정 전에 확인 요청</option><option value="info">참고 — 검증 결과에만 표시</option></select>
+          <label for="rMemo">메모</label><input id="rMemo" placeholder="근거·예외 조건 등">
+          <div class="full row"><button type="submit" class="primary" id="rSave">규칙 추가</button><button type="button" id="rClear">새로 작성</button></div>
+        </form>
+      </div>
+    </div>
+    <div class="panel"><h3>등록된 금형 그룹</h3><div style="overflow:auto" id="gList"></div></div>
+    <div class="panel"><h3>등록된 배치 규칙</h3><div style="overflow:auto" id="rList"></div></div>`;
+  el.dataset.built = "1";
+
+  const gForm = $("#gForm"), rForm = $("#rForm");
+  $("#gChange").addEventListener("change", () => { $("#gHours").hidden = $("#gChange").value !== "custom"; });
+  $("#gPickAdd").addEventListener("click", () => {
+    const v = $("#gPick").value.trim(); if (!v) return;
+    const ta = $("#gProducts"); ta.value = (ta.value.trim() ? ta.value.trim() + "\n" : "") + v; $("#gPick").value = "";
+  });
+  $("#gClear").addEventListener("click", clearGroupForm);
+  gForm.addEventListener("submit", ev => {
+    ev.preventDefault();
+    const products = [...new Set($("#gProducts").value.split("\n").map(s => s.trim()).filter(Boolean))];
+    if (products.length < 2) { toast("금형 그룹에는 품목을 2개 이상 넣어 주세요."); return; }
+    const inChange = $("#gChange").value;
+    if (inChange === "custom" && !($("#gHours").value > 0)) { toast("교체 시간을 입력하세요."); return; }
+    const g = { id: groupEditId || "g" + Date.now(), name: $("#gName").value.trim(), machines: selectedVals($("#gMachines")), products,
+      inChange, hours: inChange === "custom" ? +$("#gHours").value : "", count: $("#gCount").value ? +$("#gCount").value : "",
+      memo: $("#gMemo").value.trim(), enabled: true };
+    const i = S.moldGroups.findIndex(x => x.id === g.id);
+    if (i >= 0) { g.enabled = S.moldGroups[i].enabled; S.moldGroups[i] = g; } else S.moldGroups.push(g);
+    toast(i >= 0 ? "금형 그룹을 수정했습니다." : "금형 그룹을 추가했습니다.");
+    clearGroupForm(); save(); renderAll();
+  });
+
+  const syncType = () => {
+    const t = $("#rType").value;
+    const show = (id, on) => { $("#" + id).hidden = !on; $("#" + id + "Label").hidden = !on; };
+    show("rA", t !== "weekend"); show("rB", t === "seq"); show("rN", t === "minRun");
+    $("#rALabel").textContent = t === "seq" ? "앞 품목 (A)" : "품목";
+  };
+  $("#rType").addEventListener("change", syncType); syncType();
+  $("#rClear").addEventListener("click", clearRuleForm);
+  rForm.addEventListener("submit", ev => {
+    ev.preventDefault();
+    const t = $("#rType").value, a = $("#rA").value.trim(), b = $("#rB").value.trim(), n = +$("#rN").value;
+    if (t !== "weekend" && !a) { toast("품목을 입력하세요."); return; }
+    if (t === "seq" && !b) { toast("다음 품목(B)을 입력하세요."); return; }
+    if (t === "minRun" && !(n >= 2)) { toast("최소 일수를 2 이상으로 입력하세요."); return; }
+    const r = { id: ruleEditId || "r" + Date.now(), type: t, machines: selectedVals($("#rMachines")),
+      a: t === "weekend" ? "" : a, b: t === "seq" ? b : "", n: t === "minRun" ? n : "",
+      level: $("#rLevel").value, memo: $("#rMemo").value.trim(), enabled: true };
+    const i = S.rules.findIndex(x => x.id === r.id);
+    if (i >= 0) { r.enabled = S.rules[i].enabled; S.rules[i] = r; } else S.rules.push(r);
+    toast(i >= 0 ? "규칙을 수정했습니다." : "규칙을 추가했습니다.");
+    clearRuleForm(); save(); renderAll();
+  });
+
+  $("#btnRuleEx").addEventListener("click", () => {
+    const t = Date.now();
+    RULE_EXAMPLES.groups.forEach((g, i) => { if (!S.moldGroups.some(x => x.name === g.name)) S.moldGroups.push({ ...clone(g), id: `g${t}${i}`, enabled: true }); });
+    RULE_EXAMPLES.rules.forEach((r, i) => { if (!S.rules.some(x => x.memo === r.memo)) S.rules.push({ ...clone(r), id: `r${t}${i}`, enabled: true }); });
+    save(); renderAll(); toast("예시 규칙을 불러왔습니다. 계획표와 검증 결과에 바로 적용됩니다.");
+  });
+
+  el.addEventListener("click", e => {
+    const b = e.target.closest("button[data-act]"); if (!b) return;
+    const { act, id } = b.dataset;
+    if (act === "gEdit") {
+      const g = S.moldGroups.find(x => x.id === id); groupEditId = id;
+      $("#gName").value = g.name; setSelected($("#gMachines"), g.machines); $("#gProducts").value = g.products.join("\n");
+      $("#gChange").value = g.inChange; $("#gHours").value = g.hours || ""; $("#gHours").hidden = g.inChange !== "custom";
+      $("#gCount").value = g.count || ""; $("#gMemo").value = g.memo || ""; $("#gSave").textContent = "수정 저장";
+      $("#gForm").scrollIntoView({ block: "center" }); $("#gName").focus();
+    } else if (act === "gDel") {
+      if (!confirm("이 금형 그룹을 삭제할까요?")) return;
+      S.moldGroups = S.moldGroups.filter(x => x.id !== id); if (groupEditId === id) clearGroupForm(); save(); renderAll();
+    } else if (act === "rEdit") {
+      const r = S.rules.find(x => x.id === id); ruleEditId = id;
+      $("#rType").value = r.type; syncType(); setSelected($("#rMachines"), r.machines);
+      $("#rA").value = r.a || ""; $("#rB").value = r.b || ""; $("#rN").value = r.n || ""; $("#rLevel").value = r.level || "warn"; $("#rMemo").value = r.memo || "";
+      $("#rSave").textContent = "수정 저장"; $("#rForm").scrollIntoView({ block: "center" });
+    } else if (act === "rDel") {
+      if (!confirm("이 규칙을 삭제할까요?")) return;
+      S.rules = S.rules.filter(x => x.id !== id); if (ruleEditId === id) clearRuleForm(); save(); renderAll();
+    }
+  });
+  el.addEventListener("change", e => {
+    const cb = e.target.closest("input[data-toggle]"); if (!cb) return;
+    const list = cb.dataset.toggle === "g" ? S.moldGroups : S.rules;
+    const x = list.find(x => x.id === cb.dataset.id); if (x) { x.enabled = cb.checked; save(); renderAll(); }
+  });
+}
+function clearGroupForm() {
+  groupEditId = null; $("#gForm").reset(); setSelected($("#gMachines"), []); $("#gHours").hidden = true; $("#gSave").textContent = "그룹 추가";
+}
+function clearRuleForm() {
+  ruleEditId = null; $("#rForm").reset(); setSelected($("#rMachines"), []); $("#rType").dispatchEvent(new Event("change")); $("#rSave").textContent = "규칙 추가";
+}
+function renderRules() {
+  if (!$("#tab-rules").dataset.built) buildRulesTab();
+  const names = new Set(); for (const m of MACHINES) for (const p of productsOf(m.key)) names.add(p.name);
+  $("#dlAllProducts").innerHTML = [...names].sort().map(n => `<option value="${esc(n)}">`).join("");
+  const p = cur(); const V = p ? validate(p) : null;
+  const changeUse = {}, groupHits = {}, ruleHits = {};
+  if (V) {
+    for (const tl of Object.values(V.tls)) for (const c of tl) if (c.changeGid) changeUse[c.changeGid] = (changeUse[c.changeGid] || 0) + 1;
+    for (const it of V.ruleItems) {
+      if (it.groupId) groupHits[it.groupId] = (groupHits[it.groupId] || 0) + 1;
+      if (it.ruleId) ruleHits[it.ruleId] = (ruleHits[it.ruleId] || 0) + 1;
+    }
+  }
+  const cl = g => g.inChange === "custom" ? `${g.hours}시간` : `${CHANGE_LABEL[g.inChange]}${g.inChange === "none" ? "" : ` (${hoursOf(g.inChange)}시간)`}`;
+  $("#gList").innerHTML = S.moldGroups.length ? `<table class="tbl"><tr><th>사용</th><th>그룹</th><th>적용 설비</th><th>품목</th><th>그룹 안 전환</th><th>보유 금형</th><th>현재 계획 적용</th><th></th></tr>${S.moldGroups.map(g => `
+    <tr class="${g.enabled === false ? "off" : ""}"><td><input type="checkbox" data-toggle="g" data-id="${g.id}" ${g.enabled === false ? "" : "checked"} aria-label="사용"></td>
+      <td><b>${esc(g.name)}</b>${g.memo ? `<div class="pl">${esc(g.memo)}</div>` : ""}</td><td>${esc(machinesLabel(g.machines))}</td>
+      <td><div class="pl">${g.products.map(esc).join("<br>")}</div></td><td>${esc(cl(g))}</td><td>${g.count ? `${g.count}벌` : "-"}</td>
+      <td>전환 ${changeUse[g.id] || 0}회${groupHits[g.id] ? `<br><span class="hit">보유 수 초과 ${groupHits[g.id]}건</span>` : ""}</td>
+      <td class="row"><button data-act="gEdit" data-id="${g.id}">편집</button><button class="danger" data-act="gDel" data-id="${g.id}">삭제</button></td></tr>`).join("")}</table>`
+    : `<div class="muted">등록된 금형 그룹이 없습니다. 지금은 품목이 바뀌면 모두 「${CHANGE_LABEL[S.settings.defaultChange]}」 교체로 계산합니다.</div>`;
+  const desc = r => r.type === "deny" ? `「${esc(r.a)}」 생산 불가` : r.type === "minRun" ? `「${esc(r.a)}」 최소 ${r.n}일 연속`
+    : r.type === "seq" ? `「${esc(r.a)}」 → 「${esc(r.b)}」 전환 금지` : "토·일 금형 교체 금지";
+  $("#rList").innerHTML = S.rules.length ? `<table class="tbl"><tr><th>사용</th><th>종류</th><th>내용</th><th>적용 설비</th><th>수준</th><th>현재 계획 위반</th><th></th></tr>${S.rules.map(r => `
+    <tr class="${r.enabled === false ? "off" : ""}"><td><input type="checkbox" data-toggle="r" data-id="${r.id}" ${r.enabled === false ? "" : "checked"} aria-label="사용"></td>
+      <td>${esc(RULE_TYPES[r.type])}</td><td><b>${desc(r)}</b>${r.memo ? `<div class="pl">${esc(r.memo)}</div>` : ""}</td><td>${esc(machinesLabel(r.machines))}</td>
+      <td><span class="lv ${r.level === "info" ? "info" : "warn"}">${r.level === "info" ? "참고" : "경고"}</span></td>
+      <td>${ruleHits[r.id] ? `<span class="hit">${ruleHits[r.id]}건</span>` : "0건"}</td>
+      <td class="row"><button data-act="rEdit" data-id="${r.id}">편집</button><button class="danger" data-act="rDel" data-id="${r.id}">삭제</button></td></tr>`).join("")}</table>`
+    : `<div class="muted">등록된 배치 규칙이 없습니다.</div>`;
+}
+
+/* ===================== 기준정보 탭 ===================== */
+let masterTeam = "all", masterQ = "";
+function renderMaster() {
+  const el = $("#tab-master");
+  const q = norm(masterQ);
+  const rows = [];
+  for (const m of MACHINES) {
+    if (masterTeam !== "all" && m.team !== masterTeam) continue;
+    for (const p of productsOf(m.key)) {
+      if (q && !norm(`${m.id}${m.equip}${p.name}${p.spec || ""}${p.customer || ""}`).includes(q)) continue;
+      rows.push(`<tr><td>${esc(m.site)}</td><td>${esc(m.team)}</td><td><b>${esc(m.id)}</b></td><td>${esc(m.equip)}</td><td>${esc(p.name)}${p.custom ? ` <span class="badge">추가</span>` : ""}</td>
+        <td class="num">${p.capa ? p.capa.toLocaleString("ko-KR") : "-"}</td><td>${esc(p.cav || "")}</td><td>${esc([p.cat, p.spec, p.use, p.customer, p.kind].filter(Boolean).join(" · "))}</td>
+        <td>${p.custom ? `<button class="danger" data-del="${esc(p.id)}">삭제</button>` : ""}</td></tr>`);
+    }
+  }
+  const total = MACHINES.reduce((a, m) => a + productsOf(m.key).length, 0);
+  el.innerHTML = `
+    <div class="panel">
+      <h3>설비 ${MACHINES.length}대 · 등록 품목 ${total}개</h3>
+      <div class="muted">출처: 「${esc(MASTER.source || "-")}」 (변환 ${esc(MASTER.generatedAt || "-")}). 엑셀을 고친 뒤 <code>python 생산계획앱/tools/build_master.py</code>를 실행하면 다시 반영됩니다. Capa 단위는 원본 표의 수량 단위(본/일)입니다.</div>
+    </div>
+    <div class="panel noprint">
+      <h3>품목 추가 (엑셀에 없는 품목)</h3>
+      <div class="row">
+        <select id="addM">${MACHINES.map(m => `<option value="${m.key}">${esc(m.site)} · ${esc(m.team)} · ${esc(m.id)}</option>`).join("")}</select>
+        <input id="addName" placeholder="품목명">
+        <input id="addCapa" type="number" min="0" placeholder="일 Capa(본)" style="width:130px">
+        <button class="primary" id="btnAdd">추가</button>
+      </div>
+    </div>
+    <div class="filters">
+      <button class="chip ${masterTeam === "all" ? "on" : ""}" data-mt="all">전체</button>
+      ${TEAMS.map(t => `<button class="chip ${masterTeam === t ? "on" : ""}" data-mt="${esc(t)}">${esc(t)}</button>`).join("")}
+      <input type="search" id="mq" placeholder="설비·품목·프리폼 검색" value="${esc(masterQ)}">
+    </div>
+    <div class="tblwrap"><table class="tbl"><tr><th>공장</th><th>팀</th><th>호기</th><th>설비</th><th>품목</th><th>일 Capa</th><th>CAV</th><th>구분·스펙·출고처</th><th></th></tr>${rows.join("") || `<tr><td colspan="9" class="empty">결과가 없습니다.</td></tr>`}</table></div>`;
+  el.querySelectorAll("[data-mt]").forEach(b => b.addEventListener("click", () => { masterTeam = b.dataset.mt; renderMaster(); }));
+  const mq = $("#mq"); mq.addEventListener("input", () => { masterQ = mq.value; renderMaster(); const n = $("#mq"); n.focus(); n.setSelectionRange(n.value.length, n.value.length); });
+  $("#btnAdd").addEventListener("click", () => {
+    const name = $("#addName").value.trim(); if (!name) { toast("품목명을 입력하세요."); return; }
+    const capa = +$("#addCapa").value || null;
+    S.customProducts.push({ id: "c" + Date.now(), machine: $("#addM").value, name, capa, custom: true });
+    save(); resetMatch(); renderAll(); toast("품목을 추가했습니다.");
+  });
+  el.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => {
+    S.customProducts = S.customProducts.filter(p => p.id !== b.dataset.del); save(); resetMatch(); renderAll();
+  }));
+}
+
+/* ===================== 설정 탭 ===================== */
+function renderSettings() {
+  const st = S.settings, p = cur();
+  $("#tab-settings").innerHTML = `
+    <div class="panel"><h3>운영 기준</h3>
+      <div class="form">
+        <label for="sAuthor">계획 담당자</label><input id="sAuthor" data-s="author" value="${esc(st.author)}" placeholder="예: 생산계획 팀장">
+        <label for="sConfirm">확정 마감 (시작일 목요일)</label><input id="sConfirm" type="time" data-s="confirmTime" value="${esc(st.confirmTime)}">
+        <label for="sShare">현장 공유 (다음 날 금요일)</label><input id="sShare" type="time" data-s="shareTime" value="${esc(st.shareTime)}">
+        <label for="sBase">현행 계획 작성 시간(기준)</label><input id="sBase" type="number" min="0" step="0.5" data-s="baselineH" value="${st.baselineH}">
+      </div>
+      <div class="muted" style="margin-top:8px">인터뷰 기준: 목요일까지 확정, 금요일 아침 공유, 작성에 평균 하루(약 8시간). 정확한 마감 시각은 재확인이 필요합니다.</div>
+    </div>
+    <div class="panel"><h3>금형 교체 · 가동시간</h3>
+      <div class="form">
+        <label for="sFull">Full Set 교체 (시간)</label><input id="sFull" type="number" min="0" step="0.5" data-s="fullH" value="${st.fullH}">
+        <label for="sBlow">Blow Mold 교체 (시간)</label><input id="sBlow" type="number" min="0" step="0.5" data-s="blowH" value="${st.blowH}">
+        <label for="sDay">하루 가동시간</label><input id="sDay" type="number" min="1" max="24" data-s="dayH" value="${st.dayH}">
+        <label for="sDef">품목이 바뀔 때 기본 교체</label>
+        <select id="sDef" data-s="defaultChange"><option value="full" ${st.defaultChange === "full" ? "selected" : ""}>Full Set</option><option value="blow" ${st.defaultChange === "blow" ? "selected" : ""}>Blow Mold</option><option value="none" ${st.defaultChange === "none" ? "selected" : ""}>교체 없음</option></select>
+      </div>
+      <div class="muted" style="margin-top:8px">예상 생산량 = 일 Capa × (하루 가동시간 − 교체시간) ÷ 24. 예: Full Set 6시간이면 24시간 중 18시간만 생산.</div>
+    </div>
+    <div class="panel"><h3>데이터</h3>
+      <div class="muted" style="margin-bottom:8px">계획은 이 컴퓨터의 브라우저에 자동 저장됩니다. 다른 PC로 옮기거나 보관하려면 백업 파일을 사용하세요.</div>
+      <div class="row">
+        <button id="btnBackup">백업 파일 저장(.json)</button>
+        <label class="btn">백업 불러오기<input type="file" id="fileImport" accept=".json,application/json" hidden></label>
+        ${p ? `<button class="danger" id="btnDelPlan">현재 계획 삭제 (${mdw(p.start)})</button>` : ""}
+        <button class="danger" id="btnReset">전체 초기화</button>
+      </div>
+    </div>`;
+  document.querySelectorAll("#tab-settings [data-s]").forEach(inp => inp.addEventListener("change", () => {
+    const k = inp.dataset.s;
+    S.settings[k] = inp.type === "number" ? +inp.value : inp.value;
+    save(); renderFlow(); renderGrid(); renderCheck();
+  }));
+  $("#btnBackup").addEventListener("click", () => download(`생산계획_백업_${iso(new Date())}.json`, JSON.stringify(S, null, 1), "application/json"));
+  $("#fileImport").addEventListener("change", async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try {
+      const s = JSON.parse(await f.text());
+      if (!Array.isArray(s.plans)) throw new Error();
+      if (!confirm(`백업의 계획 ${s.plans.length}개로 현재 데이터를 바꿀까요?`)) return;
+      S = normalizeState(s); if (!cur()) S.currentId = S.plans[0]?.id || null;
+      save(); resetMatch(); renderAll(); toast("백업을 불러왔습니다.");
+    } catch { toast("올바른 백업 파일이 아닙니다."); }
+  });
+  $("#btnDelPlan")?.addEventListener("click", () => {
+    if (!confirm(`${mdw(p.start)} 계획(Rev.${p.rev})을 삭제할까요? 되돌릴 수 없습니다.`)) return;
+    S.plans = S.plans.filter(x => x.id !== p.id); S.currentId = S.plans[0]?.id || null; save(); renderAll();
+  });
+  $("#btnReset").addEventListener("click", () => {
+    if (!confirm("모든 계획·설정·추가 품목·금형/배치 규칙을 지우고 샘플 상태로 되돌릴까요?")) return;
+    try { localStorage.removeItem(STORE_KEY); } catch { }
+    S = emptyState();
+    resetMatch(); const sp = samplePlan(); if (sp) { S.plans.push(sp); S.currentId = sp.id; }
+    resetMatch(); save(); renderAll();
+  });
+}
+
+/* ===================== 내보내기 · 인쇄 ===================== */
+function download(name, text, type) {
+  const blob = new Blob([text], { type });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+$("#btnCsv").addEventListener("click", () => {
+  const p = cur(); if (!p) return;
+  const dates = planDates(p);
+  const q = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const lines = [["공장", "팀", "호기", "설비", ...dates.map(mdw), "2주 예상 생산량(본)", "금형 교체(회)", "교체 손실(h)"].map(q).join(",")];
+  for (const m of MACHINES) {
+    const tl = timeline(p, m.key);
+    const cells = tl.map(c => {
+      let s = c.cur?.stop ? "정지" : c.active ? (c.isStart ? "▶ " : "") + c.cur.text : "";
+      if (c.isStart && c.change !== "none") s += ` [교체 ${c.lossH}h]`;
+      if (c.note) s += ` (메모: ${c.note})`;
+      return s;
+    });
+    const sum = Math.round(tl.reduce((a, c) => a + (c.qty || 0), 0));
+    const chg = tl.filter(c => c.change !== "none");
+    lines.push([m.site, m.team, m.id, m.equip, ...cells, sum || "", chg.length, chg.reduce((a, c) => a + c.lossH, 0)].map(q).join(","));
+  }
+  download(`생산계획_${p.start}_Rev${p.rev}.csv`, "﻿" + lines.join("\r\n"), "text/csv;charset=utf-8");
+});
+function doPrint() {
+  const p = cur(); if (!p) return;
+  const st = { draft: "작성 중(미확정)", confirmed: "확정", shared: "공유 완료" }[p.status];
+  $("#printHead").innerHTML = `<h2>생산계획 ${mdw(p.start)} ~ ${mdw(addDays(p.start, DAYS - 1))} · Rev.${p.rev}</h2>
+    <div>${st}${p.confirmedAt && p.status !== "draft" ? ` · 확정 ${fmtDT(p.confirmedAt)}` : ""} · 담당 ${esc(p.author || S.settings.author || "-")} · 출력 ${fmtDT(Date.now())}</div>`;
+  renderGrid(true);
+  window.print();
+  renderGrid();
+}
+$("#btnPrint").addEventListener("click", doPrint);
+
+/* ===================== 탭 ===================== */
+function switchTab(t) {
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === t));
+  document.querySelectorAll(".tab").forEach(s => s.classList.toggle("on", s.id === "tab-" + t));
+}
+$("#tabs").addEventListener("click", e => { const b = e.target.closest("button[data-tab]"); if (b) switchTab(b.dataset.tab); });
+
+function renderAll() {
+  renderPicker(); renderFlow(); renderChips(); renderGrid(); renderCheck(); renderHistory(); renderInv(); renderCh(); renderRules(); renderMaster(); renderSettings();
+}
+
+/* ===================== 시작 ===================== */
+S = load();
+resetMatch();
+if (!MACHINES.length) {
+  document.querySelector("main").innerHTML = `<div class="empty">기준정보(master-data.js)를 불러오지 못했습니다. index.html과 같은 폴더에 master-data.js가 있는지 확인하세요.</div>`;
+} else {
+  if (!cur()) S.currentId = S.plans[0]?.id || null;
+  renderAll(); save();
+  if (!S.plans.length) $("#btnNew").click();
+  setInterval(() => { if (cur()?.status === "draft") renderFlow(); }, 60000);
+}
+})();
+</script>
+</body>
+</html>
